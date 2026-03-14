@@ -1,5 +1,7 @@
 package org.example.service;
 
+import org.example.dtos.UserRegistrationDTO;
+import org.example.model.Image;
 import org.example.model.User;
 import org.example.model.UserProfile;
 import org.example.repository.UserRepository;
@@ -16,18 +18,26 @@ public class UserService {
         this._userRepository = userRepository;
     }
 
-    public User GenerateNewUser(User user){
+    public User GenerateNewUser(UserRegistrationDTO userDto){
+        User user = new User(userDto.getEmail(), userDto.getNumber());
         return _userRepository.save(user);
     }
 
-    public User GenerateUSerProfile(Long userID,UserProfile userProfile){
+    public User verify(String email){
+        User user = _userRepository.findByEmail(email);
+        user.setVerified(true);
+        user.setProfile(new UserProfile("","",null, new Image()));
+        return  _userRepository.save(user);
+    }
+
+    public User generateUserProfile(Long userID,UserProfile userProfile){
         User user = _userRepository.findById(userID) .orElseThrow(() -> new RuntimeException("User not found"));
         user.setProfile(userProfile);
         return  _userRepository.save(user);
 
     }
 
-    public User Register(String email, String number){
+    public User register(String email, String number){
         return _userRepository.save(new User(email, number));
     }
 

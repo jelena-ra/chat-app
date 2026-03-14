@@ -1,6 +1,7 @@
 package org.example.model;
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 
@@ -11,6 +12,7 @@ import java.util.List;
 @Getter
 @Setter
 @Table(name = "users")
+@NoArgsConstructor
 public class User {
 
     @Id
@@ -41,7 +43,7 @@ public class User {
 
 
 
-    public User(String number, String email ){
+    public User(String email, String number ){
         this.number = number;
         this.email=email;
         this.online = false;

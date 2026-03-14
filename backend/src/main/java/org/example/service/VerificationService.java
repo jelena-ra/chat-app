@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
 public class VerificationService {
@@ -30,5 +31,15 @@ public class VerificationService {
         _verificationRepository.save(verification);
 
         emailService.sendVerificationEmail(email, code);
+    }
+
+    public VerificationCode findByEmail(String email){
+        return _verificationRepository.findByEmailAndExpirationTimeAfter(email, LocalDateTime.now()).orElse(null);
+    }
+
+    public VerificationCode useVerification(String email,String code){
+        VerificationCode verification = _verificationRepository.findByEmail(email);
+        verification.setUsed(true);
+        return _verificationRepository.save(verification);
     }
 }

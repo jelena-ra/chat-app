@@ -3,13 +3,11 @@ package org.example.service;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
-
 import java.security.SecureRandom;
-import java.util.Random;
+
 
 @Service
 public class EmailService {
@@ -29,9 +27,9 @@ public class EmailService {
             <html>
             <body style="font-family:Arial;">
                 <h2>Email verification</h2>
-                
+            
                 <p>Your verification code is:</p>
-                
+            
                 <div style="background:#f3f3f3;padding:20px;text-align:center;font-size:30px;letter-spacing:5px;">""" + verificationCode +
                 """
                 </div>
@@ -42,7 +40,7 @@ public class EmailService {
                     If you didn’t request this verification code,
                     <a href=\"""" + reportLink +
                 """
-                \">report it here</a>.
+                ">report it here</a>.
                 </p>
 
                 <p style="color:gray;font-size:12px;">
