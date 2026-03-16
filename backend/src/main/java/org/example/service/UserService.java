@@ -18,27 +18,22 @@ public class UserService {
         this._userRepository = userRepository;
     }
 
-    public User GenerateNewUser(UserRegistrationDTO userDto){
+    public void GenerateNewUser(UserRegistrationDTO userDto){
         User user = new User(userDto.getEmail(), userDto.getNumber());
-        return _userRepository.save(user);
+        _userRepository.save(user);
     }
 
-    public User verify(String email){
-        User user = _userRepository.findByEmail(email);
+    public void verify(String email){
+        User user = _userRepository.findByEmail(email).orElseThrow(()-> new RuntimeException(" User not found"));
         user.setVerified(true);
         user.setProfile(new UserProfile("","",null, new Image()));
-        return  _userRepository.save(user);
+        _userRepository.save(user);
     }
-
-    public User generateUserProfile(Long userID,UserProfile userProfile){
-        User user = _userRepository.findById(userID) .orElseThrow(() -> new RuntimeException("User not found"));
-        user.setProfile(userProfile);
-        return  _userRepository.save(user);
-
+    public User getByEmail(String email){
+        return _userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
     }
-
-    public User register(String email, String number){
-        return _userRepository.save(new User(email, number));
+    public User getById(Long id){
+        return _userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
     }
 
 }
