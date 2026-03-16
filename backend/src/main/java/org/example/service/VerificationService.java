@@ -37,9 +37,8 @@ public class VerificationService {
         return _verificationRepository.findByEmailAndExpirationTimeAfter(email, LocalDateTime.now()).orElse(null);
     }
 
-    public VerificationCode useVerification(String email,String code){
+    public void useVerification(String email,String code){
         VerificationCode verification = _verificationRepository.findByEmail(email);
-        verification.setUsed(true);
-        return _verificationRepository.save(verification);
+         _verificationRepository.delete(verification);
     }
 }

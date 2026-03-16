@@ -52,7 +52,7 @@ public class AuthController {
             String accesstoken = jwtUtil.generateToken(user.getId());
             String refreshToken = refreshTokenService.generateNewRefreshToken(user.getId());
 
-            return ResponseEntity.ok(new TokensDTO(accesstoken, refreshToken));
+            return ResponseEntity.ok(new TokensDTO(refreshToken, accesstoken));
         }
         else {
             throw new RuntimeException("Invalid verification code");
@@ -68,10 +68,8 @@ public class AuthController {
 
         Long userId = rt.getUserId();
 
-        // 🔥 novi access token
         String newAccessToken = jwtUtil.generateToken(userId);
 
-        // 🔥 opciono: rotacija refresh tokena (preporučeno)
         String newRefreshToken = refreshTokenService.generateNewRefreshToken(userId);
 
         return ResponseEntity.ok(
