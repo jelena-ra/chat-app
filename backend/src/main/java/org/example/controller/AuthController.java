@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -33,11 +34,13 @@ public class AuthController {
     private VerificationService verificationService;
 
     @PostMapping("/register")
-    public String register(@Valid @RequestBody UserRegistrationDTO request) throws Exception {
+    public  ResponseEntity<Map<String, String>> register(@Valid @RequestBody UserRegistrationDTO request) throws Exception {
         userService.GenerateNewUser(request);
         verificationService.sendCode(request.getEmail());
 
-        return "User created. Verification code sent to email.";
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "User created. Verification code sent to email.");
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/verify")
@@ -75,6 +78,12 @@ public class AuthController {
         return ResponseEntity.ok(
                 new TokensDTO(newAccessToken, newRefreshToken)
         );
+    }
+
+    @PostMapping("/resendCode")
+    public ResponseEntity<String> resendCode(@RequestParam String email) throws Exception {
+        verificationService.resendCode(email);
+        return ResponseEntity.ok("Code successfully resent");
     }
 
 }

@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Email;
 import org.example.model.VerificationCode;
 import org.example.repository.VerificationRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -40,5 +41,17 @@ public class VerificationService {
     public void useVerification(String email,String code){
         VerificationCode verification = _verificationRepository.findByEmail(email);
          _verificationRepository.delete(verification);
+    }
+
+    public void resendCode(String email) throws Exception {
+        VerificationCode oldcode = _verificationRepository.findByEmail(email);
+        if (oldcode!=null)_verificationRepository.delete(oldcode);
+        sendCode(email);
+    }
+
+    @Scheduled(fixedRate = 6 * 60 * 1000)
+    public void deleteExpiredCodes(){
+         var expiredCodes = _verificationRepository.findAllByExpirationTimeBefore(LocalDateTime.now());
+         if(!expiredCodes.isEmpty()) _verificationRepository.deleteAll(expiredCodes);
     }
 }
