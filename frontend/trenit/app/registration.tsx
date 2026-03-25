@@ -1,9 +1,8 @@
 import Button from '@/components/Button';
-import { LinearGradient } from 'expo-linear-gradient';
+import Background from '@/components/GlobalBackground';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
-
 
 
 const imgSource = require('@/assets/images/C.png');
@@ -20,7 +19,7 @@ export default function Registration(){
         params: { email },
         });
 
-        const response = await fetch('http://172.20.10.2:8080/auth/register',{
+        const response = await fetch('http://192.168.1.130:8080/auth/register',{
             method:'POST',
              headers: {
         'Content-Type': 'application/json',
@@ -32,7 +31,7 @@ export default function Registration(){
       throw new Error('Something went wrong');
     }
 
-    const data = await response.json();
+    /*const data = await response.json();*/
 
     
         
@@ -46,21 +45,18 @@ export default function Registration(){
 
 return(
     <View style={styles.page}>
-        <LinearGradient style={styles.background}
-        colors={['#EDEAE3', '#a87548']}
-      />
+        <Background/>
         <Image source={imgSource} style={styles.img} ></Image>
         <Text style={styles.txtSign}>Connect with your friends </Text>
         <Text style={styles.txt}>Create your account </Text>
         <View>
-              <View style={styles.card}>
+            <View style={styles.card}>
             <Text style={styles.txt}> phone number: </Text>
             <TextInput  style={styles.input} placeholder='Enter phone number' placeholderTextColor="#999" value={number}
   onChangeText={setPhone}></TextInput>
             <Text style={styles.txt}> email: </Text>
             <TextInput  style={styles.input}  value={email}
   onChangeText={setEmail} placeholder='Enter email' placeholderTextColor="#999" ></TextInput>
-
             <View style={styles.button}>
                 <Button label="Get Started ->" onPress={handleRegister}/>
             </View>
@@ -68,6 +64,10 @@ return(
     pathname: '/verification',
     params: { email: email }
   }}>verification</Link></Text>
+  <Text><Link  href={{
+    pathname: '/home',
+    params: { email: email }
+  }}>home</Link></Text>
             </View>
         </View>
     </View>
@@ -83,7 +83,8 @@ const styles = StyleSheet.create({
         flexDirection:"column",
         justifyContent: "flex-start",
         alignItems:"center",
-        paddingTop:2
+        paddingTop:2,
+        backgroundColor:"transparent"
     },
     input:{
         backgroundColor:"#f5f5f5",

@@ -1,9 +1,9 @@
 import ActionLink from '@/components/ActionLink';
 import Button from '@/components/Button';
+import Background from '@/components/GlobalBackground';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-
 
 export default function Verification(){
       const { email } = useLocalSearchParams();
@@ -24,6 +24,11 @@ export default function Verification(){
                     'Content-Type':'application/json'
                 }
         });
+
+        if (!response.ok) {
+        throw new Error('Something went wrong');
+        }
+
         }catch(error){
             console.log("Error: ",error)
         }
@@ -36,7 +41,7 @@ export default function Verification(){
 
              router.push('/home');
 
-            const response = await fetch('http://172.20.10.2:8080/auth/verify?code='+finalCode+'&email='+email,{
+            const response = await fetch('http://192.168.1.130:8080/auth/verify?code='+finalCode+'&email='+email,{
             method:'POST',
              headers: {
         'Content-Type': 'application/json',
@@ -46,7 +51,7 @@ export default function Verification(){
         if (!response.ok) {
         throw new Error('Something went wrong');
         }
-        const data = await response.json();
+        /*const data = await response.json();*/
         alert("Verification code succesfully sent to your address");
 
         }catch(error){
@@ -56,6 +61,7 @@ export default function Verification(){
       }
     return (
                 <View style={styles.page} >
+                <Background/>
                 <Text style={styles.txt}>Enter 6-digit code sent to your email</Text>
                     <View style={styles.inputs}>
                         {code.map((digit, index) => (

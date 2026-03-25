@@ -36,7 +36,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    backgroundColor:'#DAA06D'
+    backgroundColor:'#745148'
   },
   buttonLabel: {
     color: '#ffffff',

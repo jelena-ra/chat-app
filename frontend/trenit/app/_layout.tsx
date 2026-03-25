@@ -1,10 +1,11 @@
-import { Stack } from "expo-router";
+import { ThemeProvider } from "../components/ThemeContext";
+import RootLayoutInner from "./layoutInner";
+
 
 export default function RootLayout() {
-  return <Stack>
-      <Stack.Screen name="index" options={{ title: '' }} />
-      <Stack.Screen name="home" options={{ title: '' }} />
-      <Stack.Screen name="registration" options={{ title: '' }} />
-       <Stack.Screen name="verification"  />
-    </Stack>;
+    return <ThemeProvider>
+     <RootLayoutInner/>
+   </ThemeProvider>
+
+;
 }
