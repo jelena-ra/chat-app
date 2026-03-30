@@ -29,6 +29,10 @@ public class User {
 
     private boolean verified;
 
+    private String publicKeyEncryption;
+    private String publicKeySigning;
+
+
     @OneToMany(
             mappedBy = "owner",
             cascade = CascadeType.ALL,
@@ -47,7 +51,9 @@ public class User {
         this.number = number;
         this.email=email;
         this.online = false;
+        this.publicKeyEncryption = "";
+        this.publicKeySigning = "";
         this.verified = false;
-        this.profile = new UserProfile("","",null, new Image());
+        this.profile = null;
     }
 }

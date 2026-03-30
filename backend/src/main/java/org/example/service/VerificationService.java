@@ -1,5 +1,6 @@
 package org.example.service;
 
+import jakarta.transaction.Transactional;
 import jakarta.validation.constraints.Email;
 import org.example.model.VerificationCode;
 import org.example.repository.VerificationRepository;
@@ -49,6 +50,7 @@ public class VerificationService {
         sendCode(email);
     }
 
+    @Transactional
     @Scheduled(fixedRate = 6 * 60 * 1000)
     public void deleteExpiredCodes(){
          var expiredCodes = _verificationRepository.findAllByExpirationTimeBefore(LocalDateTime.now());

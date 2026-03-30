@@ -36,6 +36,7 @@ export default function RootLayoutInner() {
       <Stack.Screen name="home" />
       <Stack.Screen  name="registration" />
       <Stack.Screen name="verification" />
+      <Stack.Screen name="chat" />
       </Stack>
     <Sidebar
     visible={sidebarOpen}

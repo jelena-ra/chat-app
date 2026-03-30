@@ -1,5 +1,7 @@
 package org.example.controller;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
+import org.example.dtos.PublicKeysDTO;
 import org.example.dtos.TokensDTO;
 import org.example.dtos.UserRegistrationDTO;
 import org.example.model.RefreshToken;
@@ -18,6 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+@Slf4j
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -41,6 +44,12 @@ public class AuthController {
         Map<String, String> response = new HashMap<>();
         response.put("message", "User created. Verification code sent to email.");
         return ResponseEntity.ok(response);
+    }
+    @PostMapping("/publicKeys")
+    public ResponseEntity<String> savePublicKeys(@RequestBody PublicKeysDTO keysDTO) {
+        System.out.println("trazio kljuc");
+        userService.savePublicKey(keysDTO.getEmail(), keysDTO.getPublicSigningkey(), keysDTO.getPublicEncryptingkey());
+        return ResponseEntity.ok("Sucesfully saved");
     }
 
     @PostMapping("/verify")

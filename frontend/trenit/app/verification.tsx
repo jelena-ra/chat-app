@@ -1,14 +1,18 @@
 import ActionLink from '@/components/ActionLink';
 import Button from '@/components/Button';
 import Background from '@/components/GlobalBackground';
+import KeyPairs from '@/components/KeyPairs';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function Verification(){
       const { email } = useLocalSearchParams();
       const inputsRef = useRef<(TextInput | null)[]>(Array(6).fill(null));
       const [code,setCode]= useState<string[]>(['', '', '', '', '', '']);
+      const {privateSigningKey,publicSigningKey, privateCryptoKey,publicCryptoKey} = KeyPairs();
+
 
       const handleChange = (text:string,index:number)=>{
         const newCode:string[]=[...code];
@@ -28,11 +32,42 @@ export default function Verification(){
         if (!response.ok) {
         throw new Error('Something went wrong');
         }
-
+        alert("Verification code succesfully sent to your address");
         }catch(error){
             console.log("Error: ",error)
         }
         
+      }
+
+      async function generateKeyPairs (){
+        
+        if (Platform.OS === 'web') {
+            localStorage.setItem('privateSigningKey', privateSigningKey);
+            localStorage.setItem('privateCryptoKey', privateCryptoKey);
+        } else{
+            await SecureStore.setItemAsync('privateSigningKey', privateSigningKey);
+            await SecureStore.setItemAsync('privateCryptoKey', privateCryptoKey);
+        }
+        try{
+            const response = await fetch('http://192.168.1.130:8080/auth/publicKeys',{
+                method:'POST',
+                headers:{
+                    'Content-Type' : 'application/json'
+                },
+                  body: JSON.stringify({
+                        email: email,
+                        publicSigningkey: publicSigningKey,
+                        publicEncryptingkey: publicCryptoKey
+                    })
+            });
+
+            if (!response.ok) {
+            throw new Error('Something went wrong');
+            }
+
+        }catch(error){
+            console.log("Ooops!There was en error: ",error);
+        }
       }
 
       const handleVerification = async()=>{
@@ -51,8 +86,9 @@ export default function Verification(){
         if (!response.ok) {
         throw new Error('Something went wrong');
         }
-        /*const data = await response.json();*/
-        alert("Verification code succesfully sent to your address");
+      
+        generateKeyPairs();
+        
 
         }catch(error){
             console.log("Error: ",error);
