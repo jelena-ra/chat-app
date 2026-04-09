@@ -1,4 +1,4 @@
-package org.example.security;
+package org.example.config;
 
 import io.jsonwebtoken.*;
 import jakarta.annotation.PostConstruct;

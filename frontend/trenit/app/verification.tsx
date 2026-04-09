@@ -1,18 +1,32 @@
+import IP_ADDRESS from '@/assets/config';
+import { fetchWithAuth } from '@/assets/fetch';
 import ActionLink from '@/components/ActionLink';
 import Button from '@/components/Button';
 import Background from '@/components/GlobalBackground';
 import KeyPairs from '@/components/KeyPairs';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function Verification(){
-      const { email } = useLocalSearchParams();
       const inputsRef = useRef<(TextInput | null)[]>(Array(6).fill(null));
+        const [email,setEmail] = useState<string>('');
       const [code,setCode]= useState<string[]>(['', '', '', '', '', '']);
       const {privateSigningKey,publicSigningKey, privateCryptoKey,publicCryptoKey} = KeyPairs();
 
+
+useEffect(() => {
+  console.log("RADI LOG");
+   const getEmailToken = async ()=>{
+   const em= await SecureStore.getItemAsync('email');
+   console.log("Email u pocetku:"+email);
+   if(em!==null){
+   setEmail(em);
+   }
+   }
+    getEmailToken();
+}, [email]);
 
       const handleChange = (text:string,index:number)=>{
         const newCode:string[]=[...code];
@@ -22,11 +36,9 @@ export default function Verification(){
 
       const handleResendCode = async()=>{
         try{
-            const response = await fetch('http://172.20.10.2:8080/auth/resendCode?email=' +email,{
+            const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/auth/resendCode?email=` +email,{
                 method:'POST',
-                headers:{
-                    'Content-Type':'application/json'
-                }
+              
         });
 
         if (!response.ok) {
@@ -40,20 +52,32 @@ export default function Verification(){
       }
 
       async function generateKeyPairs (){
-        
+         console.log("usau u generate keys")
+          console.log("priv signing: eys"+privateSigningKey )
+          console.log("priv crypto: eys"+privateCryptoKey )
+          console.log("email"+email )
         if (Platform.OS === 'web') {
+            console.log("ovde je u generate u web")
             localStorage.setItem('privateSigningKey', privateSigningKey);
             localStorage.setItem('privateCryptoKey', privateCryptoKey);
         } else{
-            await SecureStore.setItemAsync('privateSigningKey', privateSigningKey);
-            await SecureStore.setItemAsync('privateCryptoKey', privateCryptoKey);
+            console.log("ovde je u generate u else")
+            const safeEmail = email.replace(/[^a-zA-Z0-9._-]/g, "_");
+            await SecureStore.deleteItemAsync(`privateSigningKey_${safeEmail}`);
+            await SecureStore.deleteItemAsync(`privateCryptoKey_${safeEmail}`);
+
+            await SecureStore.setItemAsync(`privateSigningKey_${safeEmail}`, privateSigningKey);
+            await SecureStore.setItemAsync(`privateCryptoKey_${safeEmail}`, privateCryptoKey);
+
+            console.log("EMAIL PRI SAVE:", safeEmail);
+            const test = await SecureStore.getItemAsync(`privateCryptoKey_${safeEmail}`);
+            console.log("TEST READ:", test);
         }
         try{
-            const response = await fetch('http://192.168.1.130:8080/auth/publicKeys',{
+            console.log("sad setuje public i priv key")
+            const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/auth/publicKeys`,{
                 method:'POST',
-                headers:{
-                    'Content-Type' : 'application/json'
-                },
+                
                   body: JSON.stringify({
                         email: email,
                         publicSigningkey: publicSigningKey,
@@ -70,26 +94,36 @@ export default function Verification(){
         }
       }
 
-      const handleVerification = async()=>{
+      async function handleVerification(){
         const finalCode = code.join('');
+          console.log("kod koji salje:"+finalCode);
         try{
 
-             router.push('/home');
-
-            const response = await fetch('http://192.168.1.130:8080/auth/verify?code='+finalCode+'&email='+email,{
+            
+             console.log("sad salje request")
+            const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/auth/verify?code=`+finalCode+'&email='+email,{
             method:'POST',
-             headers: {
-        'Content-Type': 'application/json',
-        }
+            
         });
 
         if (!response.ok) {
+            console.log("prc error")
         throw new Error('Something went wrong');
         }
-      
-        generateKeyPairs();
-        
+        const data = await response.json(); 
+        await SecureStore.deleteItemAsync(`accessToken`);
+        await SecureStore.deleteItemAsync(`refreshToken`);
 
+        await SecureStore.setItemAsync('accessToken', data.accessToken);
+        await SecureStore.setItemAsync('refreshToken', data.refreshToken);
+
+        const em = Array.isArray(email) ? email[0] : email;
+        await SecureStore.setItemAsync('email', em);
+
+        console.log("ovde setuje token: ", data.accessToken )
+        await generateKeyPairs();
+        
+ router.push('/home');
         }catch(error){
             console.log("Error: ",error);
         }

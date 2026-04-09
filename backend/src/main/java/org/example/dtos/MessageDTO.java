@@ -33,7 +33,7 @@ public class MessageDTO {
         this.content= message.getContent();
         this.signature= message.getSignature();
         this.isDisappearing = message.isDisappearing();
-        this.timeSent=getTimeSent();
+        this.timeSent=message.getTimeSent();
         this.senderEmail=message.getSender().getEmail();
         this.receiverEmail=message.getReceiver().getEmail();
         this.signature = message.getSignature();

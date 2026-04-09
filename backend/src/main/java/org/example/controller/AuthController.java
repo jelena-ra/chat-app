@@ -7,18 +7,16 @@ import org.example.dtos.UserRegistrationDTO;
 import org.example.model.RefreshToken;
 import org.example.model.User;
 import org.example.model.VerificationCode;
-import org.example.security.JwtUtil;
+import org.example.config.JwtUtil;
 import org.example.service.RefreshTokenService;
 import org.example.service.UserService;
 import org.example.service.VerificationService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 @Slf4j
 @RestController
@@ -44,6 +42,18 @@ public class AuthController {
         Map<String, String> response = new HashMap<>();
         response.put("message", "User created. Verification code sent to email.");
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/login")
+    public  ResponseEntity<TokensDTO> login(@Valid @RequestBody UserRegistrationDTO request) throws Exception {
+        User user = userService.getByEmail(request.getEmail());
+        if (!user.isVerified()) {
+            throw new RuntimeException("Please verify your email first");
+        }
+        String accessToken = jwtUtil.generateToken(user.getId());
+        String refreshToken = refreshTokenService.generateNewRefreshToken(user.getId());
+
+        return ResponseEntity.ok(new TokensDTO(refreshToken, accessToken));
     }
     @PostMapping("/publicKeys")
     public ResponseEntity<String> savePublicKeys(@RequestBody PublicKeysDTO keysDTO) {
@@ -85,7 +95,7 @@ public class AuthController {
         String newRefreshToken = refreshTokenService.generateNewRefreshToken(userId);
 
         return ResponseEntity.ok(
-                new TokensDTO(newAccessToken, newRefreshToken)
+                new TokensDTO( newRefreshToken,newAccessToken)
         );
     }
 

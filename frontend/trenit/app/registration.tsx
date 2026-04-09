@@ -1,8 +1,11 @@
+import IP_ADDRESS from '@/assets/config';
+import { fetchWithAuth } from '@/assets/fetch';
 import Button from '@/components/Button';
 import Background from '@/components/GlobalBackground';
 import { Link, useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useState } from 'react';
-import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View, } from 'react-native';
 
 
 const imgSource = require('@/assets/images/C.png');
@@ -12,27 +15,67 @@ export default function Registration(){
       const [number, setPhone] = useState('');
       const [email, setEmail] = useState('');
 
+      
       const handleRegister = async()=>{
     try{
-        router.push({
-        pathname: '/verification',
-        params: { email },
-        });
-
-        const response = await fetch('http://192.168.1.130:8080/auth/register',{
+        
+        console.log(`Pokušavam poziv na: http://${IP_ADDRESS}:8080/auth/register`);
+        const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/auth/register`,{
             method:'POST',
-             headers: {
-        'Content-Type': 'application/json',
-      },
+           
       body: JSON.stringify({ number, email }),
     });
 
       if (!response.ok) {
       throw new Error('Something went wrong');
     }
+     const em = Array.isArray(email) ? email[0] : email;
+     await SecureStore.deleteItemAsync('email');
+     console.log("email posle register "+em);
+    
+    await SecureStore.setItemAsync('email', em);
 
     /*const data = await response.json();*/
+router.push({
+        pathname: '/verification',
+        params: { email },
+        });
+    
+        
+    }catch(error){
+        console.log("Ovde je erorcina")
+        console.log(error)
+        return;
+    }
 
+
+}
+
+ const handleLogin = async()=>{
+    try{
+        router.push({
+        pathname: '/home',
+        params: { email },
+        });
+        const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/auth/login`,{
+            method:'POST',
+           
+      body: JSON.stringify({ number, email }),
+    });
+
+
+     if (!response.ok) {
+            throw new Error('Something went wrong');
+            }
+            const data = await response.json(); 
+            
+            await SecureStore.setItemAsync('accessToken', data.accessToken);
+            await SecureStore.setItemAsync('refreshToken', data.refreshToken);
+            
+            const em = Array.isArray(email) ? email[0] : email;
+            await SecureStore.setItemAsync('email', em);
+    
+            console.log("ovde setuje token: ", data.accessToken )
     
         
     }catch(error){
@@ -44,10 +87,16 @@ export default function Registration(){
 }
 
 return(
+    <KeyboardAvoidingView 
+    
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0} 
+       style={{ flex: 1, backgroundColor: '#EFEAE2' }} 
+    >
     <View style={styles.page}>
         <Background/>
         <Image source={imgSource} style={styles.img} ></Image>
-        <Text style={styles.txtSign}>Connect with your friends </Text>
+        <Text style={styles.txtSign}>Connect with your friends</Text>
         <Text style={styles.txt}>Create your account </Text>
         <View>
             <View style={styles.card}>
@@ -59,6 +108,7 @@ return(
   onChangeText={setEmail} placeholder='Enter email' placeholderTextColor="#999" ></TextInput>
             <View style={styles.button}>
                 <Button label="Get Started ->" onPress={handleRegister}/>
+                  <Button label="Login ->" onPress={handleLogin}/>
             </View>
             <Text><Link  href={{
     pathname: '/verification',
@@ -71,6 +121,7 @@ return(
             </View>
         </View>
     </View>
+    </KeyboardAvoidingView>
    
 );
 

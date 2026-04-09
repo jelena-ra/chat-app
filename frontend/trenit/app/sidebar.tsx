@@ -44,7 +44,7 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
               params: { email: email }
             }}>chat</Link></Text>
 
-            <TouchableOpacity onPress={toggleTheme}><Text>dark mode</Text></TouchableOpacity>
+            <TouchableOpacity onPress={toggleTheme}><Text>Dark mode</Text></TouchableOpacity>
             <Text>{dark ? "DARK" : "LIGHT"}</Text>
         </View>
       </Animated.View>

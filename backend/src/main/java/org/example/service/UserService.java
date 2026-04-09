@@ -1,5 +1,6 @@
 package org.example.service;
 
+import org.example.dtos.PublicKeysDTO;
 import org.example.dtos.UserRegistrationDTO;
 import org.example.model.Image;
 import org.example.model.User;
@@ -42,5 +43,12 @@ public class UserService {
     public User getById(Long id){
         return _userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
     }
+
+    public PublicKeysDTO getPublicKeys(String email){
+        String publicKeySigning =  getByEmail(email).getPublicKeySigning();
+        String publicKeyEncryption = getByEmail(email).getPublicKeyEncryption();
+        return new PublicKeysDTO(email,publicKeySigning,publicKeyEncryption);
+    }
+
 
 }
