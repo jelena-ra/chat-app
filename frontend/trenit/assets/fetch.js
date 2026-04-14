@@ -1,10 +1,7 @@
-import * as SecureStore from 'expo-secure-store';
-
 import IP_ADDRESS from '@/assets/config';
+import * as SecureStore from 'expo-secure-store';
  
-export const fetchWithAuth = async (url, options = {}) => {
-
-  let token = await SecureStore.getItemAsync('accessToken');
+export const fetchWithAuth = async (url, options = {},token) => {
 
   let headers = {
     'Content-Type': 'application/json',

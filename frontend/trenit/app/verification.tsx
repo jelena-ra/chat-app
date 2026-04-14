@@ -1,5 +1,4 @@
 import IP_ADDRESS from '@/assets/config';
-import { fetchWithAuth } from '@/assets/fetch';
 import ActionLink from '@/components/ActionLink';
 import Button from '@/components/Button';
 import Background from '@/components/GlobalBackground';
@@ -36,7 +35,7 @@ useEffect(() => {
 
       const handleResendCode = async()=>{
         try{
-            const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/auth/resendCode?email=` +email,{
+            const response = await fetch(`http://${IP_ADDRESS}:8080/auth/resendCode?email=` +email,{
                 method:'POST',
               
         });
@@ -75,7 +74,7 @@ useEffect(() => {
         }
         try{
             console.log("sad setuje public i priv key")
-            const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/auth/publicKeys`,{
+            const response = await fetch(`http://${IP_ADDRESS}:8080/auth/publicKeys`,{
                 method:'POST',
                 
                   body: JSON.stringify({
@@ -101,7 +100,7 @@ useEffect(() => {
 
             
              console.log("sad salje request")
-            const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/auth/verify?code=`+finalCode+'&email='+email,{
+            const response = await fetch(`http://${IP_ADDRESS}:8080/auth/verify?code=`+finalCode+'&email='+email,{
             method:'POST',
             
         });

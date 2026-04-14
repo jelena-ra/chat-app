@@ -1,5 +1,4 @@
 import IP_ADDRESS from '@/assets/config';
-import { fetchWithAuth } from '@/assets/fetch';
 import Button from '@/components/Button';
 import Background from '@/components/GlobalBackground';
 import { Link, useRouter } from 'expo-router';
@@ -20,7 +19,7 @@ export default function Registration(){
     try{
         
         console.log(`Pokušavam poziv na: http://${IP_ADDRESS}:8080/auth/register`);
-        const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/auth/register`,{
+        const response = await fetch(`http://${IP_ADDRESS}:8080/auth/register`,{
             method:'POST',
            
       body: JSON.stringify({ number, email }),
@@ -57,7 +56,7 @@ router.push({
         pathname: '/home',
         params: { email },
         });
-        const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/auth/login`,{
+        const response = await fetch(`http://${IP_ADDRESS}:8080/auth/login`,{
             method:'POST',
            
       body: JSON.stringify({ number, email }),
@@ -88,7 +87,6 @@ router.push({
 
 return(
     <KeyboardAvoidingView 
-    
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0} 
        style={{ flex: 1, backgroundColor: '#EFEAE2' }} 

@@ -1,10 +1,10 @@
 import IP_ADDRESS from '@/assets/config';
 import { fetchWithAuth } from '@/assets/fetch';
+import { useAuth } from '@/components/AuthContext';
 import Background from '@/components/GlobalBackground';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -30,12 +30,12 @@ interface ChatItem {
 
 export default function Home() {
     const router = useRouter();
-    const [email, setEmail] = useState<string | null>(null);
+
     const [chats, setChats] = useState<ChatItem[]>([]);
-    const [token, setToken] = useState<string | null>(null);
+    const { email, token } = useAuth(); 
 
 
-    useEffect(() => {
+    /*useEffect(() => {
         const getEmailToken = async () => {
             console.log('Uzima tokene i to');
             const em = await SecureStore.getItemAsync('email');
@@ -52,10 +52,10 @@ export default function Home() {
             }
         }
         getEmailToken();
-    }, [])
+    }, [])*/
 
 
-    useEffect(() => {
+   /* useEffect(() => {
         async function getMessages() {
             console.log('Uzima chatove i to');
 
@@ -85,7 +85,7 @@ export default function Home() {
                     };
                 });
 
-                /*transformedChats.sort((a, b) => new Date(b.timeSent).getTime() - new Date(a.timeSent).getTime());*/
+     
 
                 setChats(transformedChats);
 
@@ -97,7 +97,53 @@ export default function Home() {
 
         }
         getMessages();
-    }, [email])
+    }, [email])*/
+
+    useEffect(() => {
+        ////console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 1. Komponenta Home se učitala. Email vrednost: ${email}`);
+
+        async function getMessages() {
+            if (!email || !token) {
+                //console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 2. Još nema emaila ili tokena, prekidam.`);
+                return;
+            }
+
+            //console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 3. Imam email! Šaljem zahtev na backend...`);
+
+            try {
+                const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/messages/getChats?userEmail=${email}`, {
+                    method: 'GET',
+                }, token);
+
+               // console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 4. Backend je vratio odgovor! Status: ${response.status}`);
+
+                if (!response.ok) {
+                    throw new Error("HTTP error: " + response.status);
+                }
+
+                const data = (await response.json()) as Record<string, MessageDTO>;
+                
+                //console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 5. JSON je parsiran.`);
+
+                const transformedChats = Object.entries(data).map(([partnerEmail, lastMessageDTO]) => {
+                    return {
+                        partnerEmail: partnerEmail,
+                        content: lastMessageDTO.content,
+                        timeSent: lastMessageDTO.timeSent
+                    };
+                });
+
+                setChats(transformedChats);
+                //console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 6. State je postavljen (setChats završeno).`);
+
+            } catch (error) {
+                console.log("Error :" + error)
+                //console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] GREŠKA: ` + error);
+            }
+        }
+        
+        getMessages();
+    }, [email, token])
 
     function handleChatPress(chat: any) {
         router.push({

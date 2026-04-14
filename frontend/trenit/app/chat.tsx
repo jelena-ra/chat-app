@@ -1,11 +1,12 @@
 import IP_ADDRESS from '@/assets/config';
 import { fetchWithAuth } from '@/assets/fetch';
+import { useAuth } from '@/components/AuthContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Client, StompSubscription } from "@stomp/stompjs";
 import { useLocalSearchParams } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useRef, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import 'react-native-get-random-values';
 import 'text-encoding';
 import nacl, { box, randomBytes } from "tweetnacl";
@@ -21,16 +22,12 @@ Object.assign(global, {
 export default function Chat() {
 
   const params = useLocalSearchParams();
+  const [isLoading, setIsLoading] = useState(true);
   const receiverEmail = Array.isArray(params.receivermail) ? params.receivermail[0] : params.receivermail;
   const sharedKeyRef = useRef<Uint8Array | null>(null);
-  const [email, setEmail] = useState<string | null>(null);
-
+ 
   const [content, setContent] = useState("");
   const [disappearing, setDisappearing] = useState(false);
-  const [privateSigningKey, setPrivateSigningKey] = useState<string>('');
-  const [publicSigningKey, setPublicSigningKey] = useState<string>('');
-  const [privateEncryptingKey, setPrivateEncryptingKey] = useState<string>('');
-  const [publicEncryptingKey, setPublicEncryptingKey] = useState<string>('');
   const [sharedKey, setSharedKey] = useState<Uint8Array>();
 
   const [publicEncryptingKeyReceiver, setPublicEncryptingKeyReceiver] = useState<string>('');
@@ -40,53 +37,8 @@ export default function Chat() {
   const [connected, setConnected] = useState(false);
   const subscriptionRef = useRef<StompSubscription | null>(null);
 
-  const [token, setToken] = useState<string | null>(null);
+  const { email, token, setToken, privateSigningKey, privateEncryptingKey } = useAuth(); 
 
-
-  useEffect(() => {
-
-
-    const getToken = async () => {
-      const t = await SecureStore.getItemAsync('accessToken');
-      const em = await SecureStore.getItemAsync('email');
-      if (em !== null) {
-        const safeEmail = em.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const privS = await SecureStore.getItemAsync(`privateSigningKey_${safeEmail}`);
-        const privC = await SecureStore.getItemAsync(`privateCryptoKey_${safeEmail}`);
-
-
-        if (!privC || !privS) {
-          console.error("Keys NOT FOUND in SecureStore!");
-        }
-        console.log("priv signing: " + privS);
-        console.log("priv crypting: " + privC);
-
-        if (privC && privS) {
-          console.log("setovao je")
-          setPrivateEncryptingKey(privC);
-          setPrivateSigningKey(privS);
-        }
-        setEmail(em);
-      }
-      if (t) {
-        console.log("dosao do tokena: " + t)
-        setToken(t);
-      } else {
-        console.log("nema tokena")
-      }
-      if (em != null) {
-        console.log("EMail:" + em);
-        const myData = await getPublicKeys(em);
-        if (myData) {
-          const { _, publicSigningkey, publicEncryptingkey } = myData;
-          setPublicSigningKey(publicSigningkey);
-          setPublicEncryptingKey(publicEncryptingkey);
-          console.log("My keys are here");
-        }
-      }
-    };
-    getToken();
-  }, []);
 
   useEffect(() => {
 
@@ -94,8 +46,8 @@ export default function Chat() {
 
     async function receiverKeys() {
       const receiverData = await getPublicKeys(receiverEmail);
-      if (receiverData && privateEncryptingKey !== "") {
-        const { _, publicSigningkey, publicEncryptingkey } = receiverData;
+      if (receiverData && privateEncryptingKey !== "" && privateEncryptingKey!== null) {
+        const {  publicEncryptingkey } = receiverData;
 
         currentReceiverCryptoKey = publicEncryptingkey;
         setPublicEncryptingKeyReceiver(publicEncryptingkey);
@@ -108,7 +60,7 @@ export default function Chat() {
     receiverKeys();
 
 
-  }, [receiverEmail, privateEncryptingKey])
+  }, [receiverEmail, privateEncryptingKey, publicEncryptingKeyReceiver])
 
 
 
@@ -156,11 +108,7 @@ export default function Chat() {
       const tokken = await getValidToken();
       setToken(tokken);
 
-
       if (stompClient.current?.active) return;
-
-
-
 
       const client = new Client({
         brokerURL: `ws://${IP_ADDRESS}:8080/socket`,
@@ -172,11 +120,7 @@ export default function Chat() {
         debug: (msg: any) => console.log(msg),
         reconnectDelay: 5000,
 
-
-
       });
-
-
       client.onConnect = () => {
         console.log("Connected to Web Socket");
         console.log(" STOMP CONNECTED");
@@ -240,60 +184,78 @@ export default function Chat() {
       };
     }
     SetConnection();
-  }, [email, token]);
+  }, [token]);
 
 
   useEffect(() => {
+  let isMounted = true; 
 
-    async function populateChat() {
+  async function populateChat() {
+    if (!email || !receiverEmail || !privateEncryptingKey || !sharedKey || !token) {
+      return;
+    }
+    
+    console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 3. Imam email! Šaljem zahtev na backend...`);
 
-      if (!email || !receiverEmail || !privateEncryptingKey || !sharedKey) {
-        console.log("dont have  email or receiverEmail or private or sharedKey , waiting...");
-        return;
+    try {
+      setIsLoading(true);
+      const response = await fetchWithAuth(
+        `http://${IP_ADDRESS}:8080/messages/getfromChat?senderEmail=${email}&receiverEmail=${receiverEmail}`,
+        token
+      );
+      console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 4. Backend je vratio odgovor! Status: ${response.status}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-      try {
-          
-        const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/messages/getfromChat?senderEmail=` + email + `&receiverEmail=${receiverEmail}`)
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-          })
-          .then((messages) => {
-            const filteredkeys = messages.map((msg: any) => {
-              const chatKey = msg.senderEmail === email ? msg.receiverEmail : msg.senderEmail;
-              let decryptedmssg;
-              try {
-                decryptedmssg = decrypt(sharedKey, msg.content);
-                msg.content = decryptedmssg;
-              } catch (error) {
-                console.log("error with decryption: " + error)
-              }
-              return { ...msg, chatKey };
-            });
 
-            setChatMessages((prev) => ({
-              ...prev,
-              [receiverEmail]: filteredkeys,
-            }));
-          })
+      const messages = await response.json();
+      
+    
+      if (!isMounted) return; 
 
+      const filteredkeys = messages.map((msg: any) => {
+        const chatKey = msg.senderEmail === email ? msg.receiverEmail : msg.senderEmail;
+        try {
+          msg.content = decrypt(sharedKey, msg.content);
+        } catch (error) {
+          console.log("error with decryption: " + error);
+        }
+        return { ...msg, chatKey };
+      });
 
-      } catch (error) {
+      setChatMessages((prev) => ({
+        ...prev,
+        [receiverEmail]: filteredkeys,
+      }));
+       console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 7.Postavio je poruke u chatMessages`);
+
+    } catch (error) {
+      if (isMounted) {
         console.error("Error fetching previous messages:", error);
       }
-    }
+    }finally {
+        if (isMounted) setIsLoading(false); 
+      }
+  }
 
-    populateChat();
-  }, [email, receiverEmail, privateEncryptingKey, sharedKey])
+  populateChat();
+
+  return () => {
+    isMounted = false; 
+  };
+}, [email, receiverEmail, privateEncryptingKey, sharedKey, token]);
 
 
   async function getPublicKeys(useremail: string) {
+    if(!token){
+      console.log("access token not found")
+      return;
+    }
     try {
 
 
-      const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/users/getPublicKeys?userEmail=${useremail}`)
+      const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/users/getPublicKeys?userEmail=${useremail}`,token)
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -315,14 +277,14 @@ export default function Chat() {
       return;
     }
 
-    if (!sharedKey) {
+    if (!sharedKey && !privateSigningKey) {
       console.warn("Shared key is not ready yet!");
       return;
     }
 
     const rawContent = content;
     setContent("");
-
+    if(sharedKey!=null && privateSigningKey!=null){
     const finalcontent = encrypt(sharedKey, rawContent);
     const signature = sign(finalcontent, decodeBase64(privateSigningKey));
 
@@ -352,7 +314,8 @@ export default function Chat() {
       ...prev,
       [receiverEmail]: [...(prev[receiverEmail] || []), message]
     }));
-
+  
+  }
   };
 
   const newNonce = () => randomBytes(box.nonceLength);
@@ -402,11 +365,11 @@ export default function Chat() {
 
   }
 
-  function verifysignature(message: any, signature: any, publicKey: any) {
+ /* function verifysignature(message: any, signature: any, publicKey: any) {
     const messageBytes = decodeBase64(message);
     const signature2 = decodeBase64(signature);
     return nacl.sign.detached.verify(messageBytes, signature2, publicKey);
-  }
+  }*/
   return (
     <KeyboardAvoidingView 
     
@@ -414,10 +377,16 @@ export default function Chat() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} 
        style={{ flex: 1, backgroundColor: '#EFEAE2' }} 
     >
+       {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#128C7E" />
+        </View>
+      ) : (
   
 
       <FlatList
-        data={messages}
+        inverted={true} 
+        data={[...messages].reverse()} 
         keyboardShouldPersistTaps="handled"
         keyExtractor={(_, index) => index.toString()}
         contentContainerStyle={{ paddingBottom: 20 }}
@@ -458,7 +427,7 @@ export default function Chat() {
           );
         }}
       />
-
+)}
       <View style={styles.inputContainer}>
         
         <View style={styles.textInputWrapper}>
@@ -470,8 +439,7 @@ export default function Chat() {
             placeholderTextColor="#888"
             multiline={true}
           />
-
-          {/* Ikonica za Disappearing (umesto Switch-a) */}
+ 
           <TouchableOpacity 
             onPress={() => setDisappearing(!disappearing)} 
             style={styles.iconButton}
@@ -479,12 +447,12 @@ export default function Chat() {
             <MaterialCommunityIcons 
               name={disappearing ? "timer" : "timer-off-outline"} 
               size={24} 
-              color={disappearing ? "#128C7E" : "#888"} // Zelena ako je upaljeno, siva ako je ugašeno
+              color={disappearing ? "#128C7E" : "#888"}
             />
           </TouchableOpacity>
         </View>
 
-        {/* Send Dugme */}
+    
         <TouchableOpacity 
           style={[styles.sendButton, { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }]} 
           onPress={sendMessage}
@@ -514,7 +482,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 12,
     minHeight: 48,
-    maxHeight: 120, // Ograničava visinu ako poruka ima puno redova
+    maxHeight: 120,
     marginRight: 8,
   },
   textInput: {

@@ -40,9 +40,9 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
             }}>registration</Link></Text>
 
             <Text><Link  href={{
-              pathname: '/chat',
+              pathname: '/home',
               params: { email: email }
-            }}>chat</Link></Text>
+            }}>home</Link></Text>
 
             <TouchableOpacity onPress={toggleTheme}><Text>Dark mode</Text></TouchableOpacity>
             <Text>{dark ? "DARK" : "LIGHT"}</Text>

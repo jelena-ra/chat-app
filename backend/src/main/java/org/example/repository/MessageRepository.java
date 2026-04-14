@@ -15,18 +15,18 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     List<Message> findAllBySender_IdOrReceiver_IdOrderByTimeSentDesc(Long id, Long id2);
 
     @Query(value = """
-    SELECT *
-    FROM (
-        SELECT *
-        FROM message
-        WHERE sender_id = :userId
-        UNION ALL
-        SELECT *
-        FROM message
-        WHERE receiver_id = :userId
-    ) sub
-    ORDER BY LEAST(sender_id, receiver_id), GREATEST(sender_id, receiver_id), time_sent DESC
-    """, nativeQuery = true)
+             SELECT m
+                        FROM Message m
+                        JOIN FETCH m.sender
+                        JOIN FETCH m.receiver
+                        WHERE m.id IN (
+                            SELECT MAX(m2.id)
+                            FROM Message m2
+                            WHERE m2.sender.id = :userId OR m2.receiver.id = :userId
+                            GROUP BY LEAST(m2.sender.id, m2.receiver.id), GREATEST(m2.sender.id, m2.receiver.id)
+                        )
+                        ORDER BY m.timeSent DESC
+    """)
     List<Message> findLastMessagesPerChat(Long userId);
 
 }
