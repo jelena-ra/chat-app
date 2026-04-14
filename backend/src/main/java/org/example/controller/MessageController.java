@@ -4,6 +4,7 @@ import org.example.dtos.MessageDTO;
 import org.example.model.Message;
 import org.example.service.MessageService;
 import org.example.service.UserService;
+import org.example.service.presence.ActiveChatStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -22,6 +23,8 @@ public class MessageController {
     private  SimpMessagingTemplate messagingTemplate;
     @Autowired
     private MessageService _messageService;
+    @Autowired
+    private ActiveChatStore activeChatStore;
     @Autowired
     private UserService _userService;
 
@@ -43,6 +46,9 @@ public class MessageController {
                 System.out.println("INVALID SIGNATURE");
                 return;
             }
+
+            boolean receiverisActive = activeChatStore.isUserActiveInChatWith(message.getReceiverEmail(), message.getSenderEmail());
+
             message.setTimeSent(LocalDateTime.now());
             _messageService.saveMessage(message);
 
@@ -51,6 +57,12 @@ public class MessageController {
                     "/queue/messages",
                     message
             );
+
+            if(receiverisActive){
+                System.out.println(("User je aktivan ne treba push notif"));
+            }else{
+                System.out.println(("User nije aktivan -> treba push notif"));
+            }
         }
     }
 

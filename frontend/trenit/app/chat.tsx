@@ -2,12 +2,14 @@ import IP_ADDRESS from '@/assets/config';
 import { fetchWithAuth } from '@/assets/fetch';
 import { useAuth } from '@/components/AuthContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { Client, StompSubscription } from "@stomp/stompjs";
 import { useLocalSearchParams } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import 'react-native-get-random-values';
+
 import 'text-encoding';
 import nacl, { box, randomBytes } from "tweetnacl";
 import { decodeBase64, decodeUTF8, encodeBase64, encodeUTF8 } from 'tweetnacl-util';
@@ -185,6 +187,29 @@ export default function Chat() {
     }
     SetConnection();
   }, [token]);
+
+
+ useFocusEffect(
+  useCallback(() => {
+  if (!stompClient.current || !connected) return;
+
+  stompClient.current.publish({
+    destination: "/socket-subscriber/active-chat",
+    body: JSON.stringify({
+      userEmail: email,
+      withUser: receiverEmail
+    })
+  });
+
+  return () => {
+    stompClient.current?.publish({
+      destination: "/socket-subscriber/inactive-chat",
+      body: JSON.stringify({
+        userEmail: email
+      })
+    });
+  };
+}, [receiverEmail, connected, email]));
 
 
   useEffect(() => {
