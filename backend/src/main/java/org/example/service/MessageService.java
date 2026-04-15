@@ -40,18 +40,46 @@ public class MessageService {
          _messageRepository.findAllBySender_IdAndReceiver_IdOrSender_IdAndReceiver_Id(senderId,receiverId, receiverId, senderId).forEach(m-> list.add(new MessageDTO(m)));
          return list;
     }
-
+/*
     public Map<String,MessageDTO> getChatsAndLastMessage(String userEmail){
+        long start = System.currentTimeMillis();
         Long id = userService.getByEmail(userEmail).getId();
-
-        return _messageRepository.findLastMessagesPerChat(id).stream()
+        Map<String,MessageDTO> map = _messageRepository.findLastMessagesPerChat(id).stream()
                 .map(MessageDTO::new)
                 .collect(Collectors.toMap(
                         msg -> msg.getSenderEmail().equals(userEmail) ? msg.getReceiverEmail() : msg.getSenderEmail(),
                         msg -> msg,
                         (existing, replacement) -> existing
                 ));
+        System.out.println("getChats backend time: " + (System.currentTimeMillis() - start) + " ms");
+        return map;
 
+    }*/
+
+    public Map<String, MessageDTO> getChatsAndLastMessage(String userEmail) {
+        long start = System.currentTimeMillis();
+
+        Long id = userService.getByEmail(userEmail).getId();
+        Map<String, MessageDTO> map = _messageRepository.findLastMessagesPerChat(id)
+                .stream()
+                .map(p -> new MessageDTO(
+                        p.getContent(),
+                        null,
+                        false,
+                        p.getTimeSent(),
+                        p.getSenderEmail(),
+                        p.getReceiverEmail()
+                ))
+                .collect(Collectors.toMap(
+                        msg -> msg.getSenderEmail().equals(userEmail)
+                                ? msg.getReceiverEmail()
+                                : msg.getSenderEmail(),
+                        msg -> msg,
+                        (existing, replacement) -> existing
+                ));
+
+        System.out.println("getChats backend time: " + (System.currentTimeMillis() - start) + " ms");
+        return map;
     }
 
 

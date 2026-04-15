@@ -7,7 +7,13 @@ import org.example.model.User;
 import org.example.model.UserProfile;
 import org.example.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class UserService {
@@ -48,6 +54,12 @@ public class UserService {
         String publicKeySigning =  getByEmail(email).getPublicKeySigning();
         String publicKeyEncryption = getByEmail(email).getPublicKeyEncryption();
         return new PublicKeysDTO(email,publicKeySigning,publicKeyEncryption);
+    }
+
+    public List<PublicKeysDTO> getAllPublicKeys(List<String> emails){
+        List<PublicKeysDTO> keys = new ArrayList<>();
+        _userRepository.findAllByEmailIn(emails).forEach(user -> keys.add(new PublicKeysDTO(user.getEmail(),user.getPublicKeySigning(),user.getPublicKeyEncryption())));
+        return keys;
     }
 
 
