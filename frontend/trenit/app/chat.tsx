@@ -10,14 +10,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import 'react-native-get-random-values';
 
-import 'text-encoding';
+import { TextDecoder, TextEncoder } from 'text-encoding';
 import nacl, { box, randomBytes } from "tweetnacl";
 import { decodeBase64, decodeUTF8, encodeBase64, encodeUTF8 } from 'tweetnacl-util';
 
-const TextEncodingPolyfill = require('text-encoding');
+
+
 Object.assign(global, {
-  TextEncoder: TextEncodingPolyfill.TextEncoder,
-  TextDecoder: TextEncodingPolyfill.TextDecoder,
+  TextEncoder,
+  TextDecoder,
 });
 
 
@@ -43,7 +44,7 @@ export default function Chat() {
 
 
   useEffect(() => {
-
+ console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 0. U prvom sam useeffectu...`);
     let currentReceiverCryptoKey = publicEncryptingKeyReceiver;
 
     async function receiverKeys() {
@@ -62,7 +63,7 @@ export default function Chat() {
     receiverKeys();
 
 
-  }, [receiverEmail, privateEncryptingKey, publicEncryptingKeyReceiver])
+  }, [receiverEmail, privateEncryptingKey])
 
 
 
@@ -368,7 +369,7 @@ export default function Chat() {
 
     const message = messageWithNonceAsUint8Array.slice(
       box.nonceLength,
-      messageWithNonce.length
+      messageWithNonceAsUint8Array.length
     );
 
     const decrypted = box.open.after(message, nonce, secretOrSharedKey);

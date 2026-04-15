@@ -5,9 +5,11 @@ import Background from '@/components/GlobalBackground';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-
+import 'text-encoding';
+import { box } from "tweetnacl";
+import { decodeBase64, encodeUTF8 } from 'tweetnacl-util';
 
 const profileImg = require('@/assets/images/profile.png');
 
@@ -32,72 +34,51 @@ export default function Home() {
     const router = useRouter();
 
     const [chats, setChats] = useState<ChatItem[]>([]);
-    const { email, token } = useAuth(); 
+    const { email, token ,privateEncryptingKey} = useAuth(); 
+      const sharedKeyRef = useRef<Uint8Array | null>(null);
 
 
-    /*useEffect(() => {
-        const getEmailToken = async () => {
-            console.log('Uzima tokene i to');
-            const em = await SecureStore.getItemAsync('email');
-            const t = await SecureStore.getItemAsync('accessToken');
-            if (em != null) {
-                setEmail(em);
-            } else {
-                console.log("nema email")
-            }
-            if (t != null) {
-                setToken(t);
-            } else {
-                console.log("nema tokena")
-            }
-        }
-        getEmailToken();
-    }, [])*/
+     async function receiverKeys(receiverEmail: string): Promise<Uint8Array | null> {
+  const receiverData = await getPublicKeys(receiverEmail);
+
+  if (receiverData && privateEncryptingKey) {
+    const { publicEncryptingkey } = receiverData;
+
+    const sharedB = box.before(
+      decodeBase64(publicEncryptingkey),
+      decodeBase64(privateEncryptingKey)
+    );
+    sharedKeyRef.current = sharedB;
+
+    return sharedB;
+  }
+
+  return null;
+}
+ 
 
 
-   /* useEffect(() => {
-        async function getMessages() {
-            console.log('Uzima chatove i to');
-
-            try {
-                console.log("Pokusava dobaviit sve poruke i chatove");
-                if (!email || !token) return;
-
-                const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/messages/getChats?userEmail=${email}`, {
-                    method: 'GET',
-
-                });
+   async function getPublicKeys(useremail: string) {
+    if(!token){
+      console.log("access token not found")
+      return;
+    }
+    try {
 
 
-                if (!response.ok) {
-                    throw new Error("HTTP greška: " + response.status);
-                }
+      const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/users/getPublicKeys?userEmail=${useremail}`,token)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return data;
 
 
-                const data = (await response.json()) as Record<string, MessageDTO>;
+    } catch (error) {
+      console.error("Error fetching previous messages:", error);
+    }
+  }
 
-
-                const transformedChats = Object.entries(data).map(([partnerEmail, lastMessageDTO]) => {
-                    return {
-                        partnerEmail: partnerEmail,
-                        content: lastMessageDTO.content,
-                        timeSent: lastMessageDTO.timeSent
-                    };
-                });
-
-     
-
-                setChats(transformedChats);
-
-
-            } catch (error) {
-                console.log("Oops..there was an error : " + error);
-            }
-
-
-        }
-        getMessages();
-    }, [email])*/
 
     useEffect(() => {
         ////console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 1. Komponenta Home se učitala. Email vrednost: ${email}`);
@@ -125,13 +106,17 @@ export default function Home() {
                 
                 //console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 5. JSON je parsiran.`);
 
-                const transformedChats = Object.entries(data).map(([partnerEmail, lastMessageDTO]) => {
+                const transformedChats = await Promise.all(
+                Object.entries(data).map(async ([partnerEmail, lastMessageDTO]) => {
+                    const key = await receiverKeys(partnerEmail);
+
                     return {
-                        partnerEmail: partnerEmail,
-                        content: lastMessageDTO.content,
-                        timeSent: lastMessageDTO.timeSent
+                    partnerEmail,
+                    content: key ? decrypt(key, lastMessageDTO.content) ?? "" : "",
+                    timeSent: lastMessageDTO.timeSent,
                     };
-                });
+                })
+                );
 
                 setChats(transformedChats);
                 //console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 6. State je postavljen (setChats završeno).`);
@@ -144,6 +129,28 @@ export default function Home() {
         
         getMessages();
     }, [email, token])
+
+     function decrypt(secretOrSharedKey: Uint8Array, messageWithNonce: string) {
+
+    const messageWithNonceAsUint8Array = decodeBase64(messageWithNonce);
+    const nonce = messageWithNonceAsUint8Array.slice(0, box.nonceLength);
+
+    const message = messageWithNonceAsUint8Array.slice(
+      box.nonceLength,
+      messageWithNonceAsUint8Array.length
+    );
+
+    const decrypted = box.open.after(message, nonce, secretOrSharedKey);
+
+    if (!decrypted) {
+      //throw new Error('Could not decrypt message');
+      return null;
+    }
+
+    const base64DecryptedMessage = encodeUTF8(decrypted);
+    return JSON.parse(base64DecryptedMessage);
+  };
+
 
     function handleChatPress(chat: any) {
         router.push({

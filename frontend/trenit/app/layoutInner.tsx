@@ -40,7 +40,8 @@ export default function RootLayoutInner() {
       </Stack>
     <Sidebar
     visible={sidebarOpen}
-    onClose={() => setSidebarOpen(false)}/>
+    onClose={() => setSidebarOpen(false)}
+    />
    </>
 
 ;
