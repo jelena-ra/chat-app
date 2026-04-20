@@ -1,9 +1,11 @@
 package org.example.service;
 
+import jakarta.transaction.Transactional;
 import jakarta.validation.constraints.Email;
 import org.example.model.VerificationCode;
 import org.example.repository.VerificationRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -37,9 +39,21 @@ public class VerificationService {
         return _verificationRepository.findByEmailAndExpirationTimeAfter(email, LocalDateTime.now()).orElse(null);
     }
 
-    public VerificationCode useVerification(String email,String code){
+    public void useVerification(String email,String code){
         VerificationCode verification = _verificationRepository.findByEmail(email);
-        verification.setUsed(true);
-        return _verificationRepository.save(verification);
+         _verificationRepository.delete(verification);
+    }
+
+    public void resendCode(String email) throws Exception {
+        VerificationCode oldcode = _verificationRepository.findByEmail(email);
+        if (oldcode!=null)_verificationRepository.delete(oldcode);
+        sendCode(email);
+    }
+
+    @Transactional
+    @Scheduled(fixedRate = 6 * 60 * 1000)
+    public void deleteExpiredCodes(){
+         var expiredCodes = _verificationRepository.findAllByExpirationTimeBefore(LocalDateTime.now());
+         if(!expiredCodes.isEmpty()) _verificationRepository.deleteAll(expiredCodes);
     }
 }

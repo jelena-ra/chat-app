@@ -1,12 +1,19 @@
 package org.example.service;
 
+import org.example.dtos.PublicKeysDTO;
 import org.example.dtos.UserRegistrationDTO;
 import org.example.model.Image;
 import org.example.model.User;
 import org.example.model.UserProfile;
 import org.example.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class UserService {
@@ -18,27 +25,42 @@ public class UserService {
         this._userRepository = userRepository;
     }
 
-    public User GenerateNewUser(UserRegistrationDTO userDto){
+    public void GenerateNewUser(UserRegistrationDTO userDto){
+        if(_userRepository.findByEmail(userDto.getEmail()).isPresent()) throw new  RuntimeException(" User already exists");
         User user = new User(userDto.getEmail(), userDto.getNumber());
-        return _userRepository.save(user);
+        _userRepository.save(user);
     }
 
-    public User verify(String email){
-        User user = _userRepository.findByEmail(email);
+    public void verify(String email){
+        User user = _userRepository.findByEmail(email).orElseThrow(()-> new RuntimeException(" User not found"));
         user.setVerified(true);
         user.setProfile(new UserProfile("","",null, new Image()));
-        return  _userRepository.save(user);
+        _userRepository.save(user);
+    }
+    public void savePublicKey (String email, String publicKeySigning , String publicKeyEncrypting){
+        User user = _userRepository.findByEmail(email).orElseThrow(()-> new RuntimeException(" User not found"));
+        user.setPublicKeySigning(publicKeySigning);
+        user.setPublicKeyEncryption(publicKeyEncrypting);
+        _userRepository.save(user);
+    }
+    public User getByEmail(String email){
+        return _userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
+    }
+    public User getById(Long id){
+        return _userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
     }
 
-    public User generateUserProfile(Long userID,UserProfile userProfile){
-        User user = _userRepository.findById(userID) .orElseThrow(() -> new RuntimeException("User not found"));
-        user.setProfile(userProfile);
-        return  _userRepository.save(user);
-
+    public PublicKeysDTO getPublicKeys(String email){
+        String publicKeySigning =  getByEmail(email).getPublicKeySigning();
+        String publicKeyEncryption = getByEmail(email).getPublicKeyEncryption();
+        return new PublicKeysDTO(email,publicKeySigning,publicKeyEncryption);
     }
 
-    public User register(String email, String number){
-        return _userRepository.save(new User(email, number));
+    public List<PublicKeysDTO> getAllPublicKeys(List<String> emails){
+        List<PublicKeysDTO> keys = new ArrayList<>();
+        _userRepository.findAllByEmailIn(emails).forEach(user -> keys.add(new PublicKeysDTO(user.getEmail(),user.getPublicKeySigning(),user.getPublicKeyEncryption())));
+        return keys;
     }
+
 
 }
