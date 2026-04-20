@@ -18,7 +18,7 @@ import { decodeBase64, decodeUTF8, encodeBase64, encodeUTF8 } from 'tweetnacl-ut
 
 
 
-Object.assign(global, {
+Object.assign(globalThis, {
   TextEncoder,
   TextDecoder,
 });
@@ -76,7 +76,7 @@ export default function Chat() {
           stompClient.current.publish({
             destination: "/socket-subscriber/inactive-chat",
             body: email
-           
+
           });
         }
       }
@@ -98,7 +98,7 @@ export default function Chat() {
         subscriptionRef.current.unsubscribe();
       }
 
-        if (readsubscriptionRef.current) {
+      if (readsubscriptionRef.current) {
         readsubscriptionRef.current.unsubscribe();
       }
 
@@ -129,47 +129,47 @@ export default function Chat() {
       });
 
 
-       readsubscriptionRef.current = stompClient.current.subscribe (`/user/${email}/queue/read`, (message) => {
+      readsubscriptionRef.current = stompClient.current.subscribe(`/user/${email}/queue/read`, (message) => {
 
 
         const readUpdate = JSON.parse(message.body);
-        
-            
+
+
         const updatedMessageIds: number[] = readUpdate.messageId || [];
         console.log("evo ih id:" + updatedMessageIds);
 
-      if (updatedMessageIds.length === 0) return;
+        if (updatedMessageIds.length === 0) return;
 
-      setChatMessages((prev) => {
-        const updatedChats: Record<string, any[]> = {};
+        setChatMessages((prev) => {
+          const updatedChats: Record<string, any[]> = {};
 
-        for (const chatKey in prev) {
-          const currentMessages = Array.isArray(prev[chatKey]) ? prev[chatKey] : [];
+          for (const chatKey in prev) {
+            const currentMessages = Array.isArray(prev[chatKey]) ? prev[chatKey] : [];
 
-          updatedChats[chatKey] = currentMessages.map((msg: any) =>
-            updatedMessageIds.includes(msg.clientId)
-              ? { ...msg, read: true }
-              : msg
+            updatedChats[chatKey] = currentMessages.map((msg: any) =>
+              updatedMessageIds.includes(msg.clientId)
+                ? { ...msg, read: true }
+                : msg
 
-         
-    );
 
-     console.log("Eco sad sve: ", updatedChats[chatKey]);
-  }
+            );
 
-  return {
-    ...prev,
-    ...updatedChats,
-  };
-});
+            console.log("Eco sad sve: ", updatedChats[chatKey]);
+          }
 
-       });
-      }
-       
+          return {
+            ...prev,
+            ...updatedChats,
+          };
+        });
+
+      });
+    }
+
 
     SetConnection();
 
-  
+
   }, [token, connected, email, stompClient]);
 
 
@@ -186,7 +186,7 @@ export default function Chat() {
       });
 
       return () => {
-         if (!email) return; 
+        if (!email) return;
         stompClient.current?.publish({
           destination: "/socket-subscriber/inactive-chat",
           body: email
@@ -232,35 +232,11 @@ export default function Chat() {
           return { ...msg, chatKey };
         });
 
-              setChatMessages((prev) => ({
-        ...prev,
-        [receiverEmail]: filteredkeys,
-      }));
-       console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 7.Postavio je poruke u chatMessages`);
-
-      /*  setChatMessages((prev) => {
-  const existing = prev[receiverEmail] || [];
-  const merged = [...existing];
-
-  for (const msg of filteredkeys) {
-    const alreadyExists = merged.some((m: any) => m.id === msg.id);
-    if (!alreadyExists) {
-      merged.push(msg);
-    }
-  }
-
-  merged.sort(
-    (a: any, b: any) =>
-      new Date(a.timeSent).getTime() - new Date(b.timeSent).getTime()
-  );
-
-  return {
-    ...prev,
-    [receiverEmail]: merged,
-  };
-});
-        console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 7.Postavio je poruke u chatMessages`);*/
-
+        setChatMessages((prev) => ({
+          ...prev,
+          [receiverEmail]: filteredkeys,
+        }));
+        console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 7.Postavio je poruke u chatMessages`);
       } catch (error) {
         if (isMounted) {
           console.error("Error fetching previous messages:", error);
@@ -318,7 +294,7 @@ export default function Chat() {
     if (sharedKey != null && privateSigningKey != null) {
       const finalcontent = encrypt(sharedKey, rawContent);
       const signature = sign(finalcontent, decodeBase64(privateSigningKey));
-      const clientId =  uuidv4();
+      const clientId = uuidv4();
       const message = {
         clientId: clientId,
         content: finalcontent,
@@ -327,7 +303,7 @@ export default function Chat() {
         senderEmail: email,
         receiverEmail: receiverEmail,
         disappearing: disappearing,
-        read:false
+        read: false
       }
 
       console.log("Sending message:", message);
@@ -439,7 +415,7 @@ export default function Chat() {
                   {item.senderEmail}
                 </Text>
 
-{/*#DCF8C6 */}
+                {/*#DCF8C6 */}
                 <View
                   style={{
                     backgroundColor: isMe ? "#dfc490" : "#ececec",
@@ -452,12 +428,12 @@ export default function Chat() {
                       ? item.content
                       : "Dekriptovanje..."}
                   </Text>
-                  <View style={{ flexDirection:"row", justifyContent:"space-between"}}>
-                  <Text style={{ fontSize: 10, color: "gray", marginTop: 5 }}>
-                    {new Date(item.timeSent).toLocaleTimeString()}
-                  </Text>
-                  {(isMe && !item.read) ? <MaterialIcons name="check" size={13}  /> : null}
-                  {(isMe && item.read) ? <MaterialCommunityIcons name="check-all" size={13} color="#29889d"  /> : null}
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ fontSize: 10, color: "gray", marginTop: 5 }}>
+                      {new Date(item.timeSent).toLocaleTimeString()}
+                    </Text>
+                    {(isMe && !item.read) ? <MaterialIcons name="check" size={13} /> : null}
+                    {(isMe && item.read) ? <MaterialCommunityIcons name="check-all" size={13} color="#29889d" /> : null}
                   </View>
                 </View>
               </View>

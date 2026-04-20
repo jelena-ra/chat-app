@@ -1,7 +1,7 @@
 import { Redirect } from "expo-router";
 import { TextEncoder } from 'text-encoding';
 
-global.TextEncoder = TextEncoder;
+globalThis.TextEncoder = TextEncoder;
 
 export default function Index() {
 
