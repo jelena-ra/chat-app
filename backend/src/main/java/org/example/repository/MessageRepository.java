@@ -1,11 +1,13 @@
 package org.example.repository;
 
+import jakarta.transaction.Transactional;
 import org.example.model.LastChatMessageProjection;
 import org.example.model.Message;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.jpa.repository.Modifying;
 
 import java.util.List;
 
@@ -37,7 +39,8 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
         m.content AS content,
         m.time_sent AS timeSent,
         s.email AS senderEmail,
-        r.email AS receiverEmail
+        r.email AS receiverEmail,
+        m.is_read AS read
     FROM message m
     JOIN users s ON s.id = m.sender_id
     JOIN users r ON r.id = m.receiver_id
@@ -48,5 +51,26 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
         m.time_sent DESC
 """, nativeQuery = true)
     List<LastChatMessageProjection> findLastMessagesPerChat(@Param("userId") Long userId);
+
+    @Query("""
+    SELECT m.clientId
+    FROM Message m
+    WHERE m.sender.email = :friendEmail
+      AND m.receiver.email = :email
+      AND m.isRead = false
+""")
+    List<String> findUnreadMessageIdsInChat(@Param("email") String email,
+                                          @Param("friendEmail") String friendEmail);
+
+    @Modifying
+    @Transactional
+    @Query("""
+    UPDATE Message m
+    SET m.isRead = true
+    WHERE m.sender.email = :friendEmail
+      AND m.receiver.email = :email
+      AND m.isRead = false
+""")
+    int markAllAsReadInChat(@Param("email") String email, @Param("friendEmail") String friendEmail);
 
 }

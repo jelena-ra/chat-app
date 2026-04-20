@@ -1,6 +1,7 @@
 package org.example.controller;
 
 import org.example.dtos.MessageDTO;
+import org.example.dtos.ReadUpdateDTO;
 import org.example.model.Message;
 import org.example.service.MessageService;
 import org.example.service.UserService;
@@ -12,6 +13,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +29,7 @@ public class MessageController {
     private ActiveChatStore activeChatStore;
     @Autowired
     private UserService _userService;
+
 
     @MessageMapping("/send")
     private void sendMessage(@RequestBody MessageDTO message){
@@ -49,6 +52,13 @@ public class MessageController {
 
             boolean receiverisActive = activeChatStore.isUserActiveInChatWith(message.getReceiverEmail(), message.getSenderEmail());
 
+            if(receiverisActive){
+                message.setRead(true);
+                System.out.println(("User je aktivan ne treba push notif"));
+            }else{
+                System.out.println(("User nije aktivan -> treba push notif"));
+            }
+
             message.setTimeSent(LocalDateTime.now());
             _messageService.saveMessage(message);
 
@@ -58,11 +68,17 @@ public class MessageController {
                     message
             );
 
-            if(receiverisActive){
-                System.out.println(("User je aktivan ne treba push notif"));
-            }else{
-                System.out.println(("User nije aktivan -> treba push notif"));
+            if(message.isRead()){
+                List<String> id = new ArrayList<>();
+                id.add(message.getClientId());
+
+                messagingTemplate.convertAndSendToUser(
+                        message.getSenderEmail(),
+                        "/queue/read",
+                        new ReadUpdateDTO("messages-read", id)
+                );
             }
+
         }
     }
 

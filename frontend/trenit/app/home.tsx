@@ -1,15 +1,20 @@
 import IP_ADDRESS from '@/assets/config';
 import { fetchWithAuth } from '@/assets/fetch';
 import { useAuth } from '@/components/AuthContext';
+import { useChatSocket } from '@/components/ChatSocketContext';
 import Background from '@/components/GlobalBackground';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { StompSubscription } from '@stomp/stompjs';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import 'text-encoding';
 import { box } from "tweetnacl";
 import { decodeBase64, encodeUTF8 } from 'tweetnacl-util';
+
 
 const profileImg = require('@/assets/images/profile.png');
 
@@ -28,6 +33,8 @@ interface ChatItem {
     partnerEmail: string;
     content: string;
     timeSent: string;
+    isRead: boolean;
+    senderEmail:string;
 }
 
 const publicKeysCache: Record<string, { publicEncryptingkey: string }> = {};
@@ -36,8 +43,11 @@ export default function Home() {
     console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] usao u home...`);
     const router = useRouter();
 
+      const { stompClient, connected } = useChatSocket();
+
     const [chats, setChats] = useState<ChatItem[]>([]);
     const { email, token, privateEncryptingKey } = useAuth();
+    const subscriptionRef = useRef<StompSubscription | null>(null);
 
 
     async function getMissingPublicKeys(partnerEmails: string[]) {
@@ -83,11 +93,30 @@ export default function Home() {
         return publicKeysCache;
     }
 
+useFocusEffect(
+    useCallback(() => {
+        if (!connected || !stompClient.current || !email) return;
 
-    useEffect(() => {
-    
-        //const t0 = Date.now();
-        async function getMessages() {
+        if (subscriptionRef.current) {
+            subscriptionRef.current.unsubscribe();
+        }
+
+        subscriptionRef.current = stompClient.current.subscribe(
+            `/user/${email}/queue/messages`,
+            async (message) => {
+                console.log("HOME dobio novu poruku:", message.body);
+                await getMessages();
+            }
+        );
+
+        return () => {
+            subscriptionRef.current?.unsubscribe();
+            subscriptionRef.current = null;
+        };
+    }, [connected, email, token, privateEncryptingKey, stompClient])
+);
+
+async function getMessages() {
             if (!email || !token) {
             
                 return;
@@ -119,6 +148,11 @@ export default function Home() {
                         const partnerKeys = keysByEmail[partnerEmail];
 
                         let content = "";
+                        let senderEmail = "";
+
+                        if(lastMessageDTO.senderEmail!=null){
+                            senderEmail = lastMessageDTO.senderEmail;
+                        }
 
                         if (partnerKeys?.publicEncryptingkey && privateEncryptingKey) {
                             const sharedKey = box.before(
@@ -127,18 +161,23 @@ export default function Home() {
                             );
                             content = decrypt(sharedKey, lastMessageDTO.content) ?? "";
                         }
-
+                        console.log("Is read? "+lastMessageDTO.read);
                         return {
                             partnerEmail,
                             content,
-                            timeSent: lastMessageDTO.timeSent,
+                            timeSent: lastMessageDTO.timeSent.slice(5, 16).replace("T", " "),
+                            isRead:lastMessageDTO.read,
+                            senderEmail
                         };
 
                     }
 
-                );
+                ).sort((a, b) =>
+            new Date(b.timeSent).getTime() - new Date(a.timeSent).getTime()
+            );
                 //console.log("decrypt+transform:", Date.now() - t2, "ms");
                 //console.log("TOTAL:", Date.now() - t0, "ms");
+                
                 setChats(transformedChats);
                 //console.log(`[VRIJEME: ${new Date().toISOString().split('T')[1]}] 6. State Chatova je postavljen (setChats završeno).`);
 
@@ -146,9 +185,10 @@ export default function Home() {
                 console.log("Error :" + error)
             }
         }
-
+        
+    useEffect(() => {
         getMessages();
-    }, [email, token, privateEncryptingKey])
+    },[email] )
 
     function decrypt(secretOrSharedKey: Uint8Array, messageWithNonce: string) {
 
@@ -203,13 +243,23 @@ export default function Home() {
                     <TouchableOpacity style={styles.chatCard} onPress={() => handleChatPress(item)}>
                         <View style={styles.image}><Image source={profileImg} style={styles.profimage}></Image></View>
                         <View style={styles.nameAndMssg}>
-                            <View style={styles.name}><Text /*style={message.isRead ? styles.read : styles.notRead}*/>{item.partnerEmail}</Text>
+                            <View style={styles.name}><Text style={(!item.isRead && item.senderEmail!==email) ? styles.notRead : null}>{item.partnerEmail}</Text>
                             </View>
                             <View style={styles.mssg}><Text numberOfLines={1} ellipsizeMode="tail">{item.content}</Text></View>
                         </View>
                         <View style={styles.notifAndTime}>
                             <View style={styles.name}><Text>{item.timeSent}</Text></View>
-
+                            {(!item.isRead && item.senderEmail!==email) ? (<View>
+                                <MaterialCommunityIcons
+                                    name="circle"
+                                    size={16}
+                                    color="#e30d0d"
+                                    
+                                     style={{ marginTop: 6, alignSelf: "flex-end",opacity:1 }}
+                                />
+                                </View>
+                                ) :  null}
+                            
                         </View>
                     </TouchableOpacity>)}
             />
@@ -287,6 +337,12 @@ const styles = StyleSheet.create({
     },
     notifAndTime: {
         marginLeft: "auto",
+     flexDirection: "column",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    paddingRight: 10,
+    minWidth: 10,
+   
     },
     name: {},
     mssg: {

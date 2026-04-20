@@ -1,5 +1,6 @@
 package org.example.service;
 
+import jakarta.transaction.Transactional;
 import org.example.dtos.MessageDTO;
 import org.example.model.Message;
 import org.example.model.User;
@@ -29,7 +30,7 @@ public class MessageService {
     public Message saveMessage(MessageDTO message){
         User sender = userService.getByEmail(message.getSenderEmail());
         User receiver = userService.getByEmail(message.getReceiverEmail());
-        Message mess = new Message(null,message.getContent(), message.getSignature() , message.isDisappearing(),false, false, false, LocalDateTime.now(),sender, receiver);
+        Message mess = new Message(null,message.getClientId(),message.getContent(), message.getSignature() , message.isDisappearing(),false, false, message.isRead(), LocalDateTime.now(),sender, receiver);
         return _messageRepository.save(mess);
     }
 
@@ -63,12 +64,14 @@ public class MessageService {
         Map<String, MessageDTO> map = _messageRepository.findLastMessagesPerChat(id)
                 .stream()
                 .map(p -> new MessageDTO(
+                        p.getClientId(),
                         p.getContent(),
                         null,
                         false,
                         p.getTimeSent(),
                         p.getSenderEmail(),
-                        p.getReceiverEmail()
+                        p.getReceiverEmail(),
+                        p.getRead()
                 ))
                 .collect(Collectors.toMap(
                         msg -> msg.getSenderEmail().equals(userEmail)
@@ -81,7 +84,14 @@ public class MessageService {
         System.out.println("getChats backend time: " + (System.currentTimeMillis() - start) + " ms");
         return map;
     }
-
+    @Transactional
+    public List<String> markAsReadAllInChat (String email, String friendEmail){
+        List<String> ids = _messageRepository.findUnreadMessageIdsInChat(email, friendEmail);
+        if (!ids.isEmpty()) {
+            _messageRepository.markAllAsReadInChat(email, friendEmail);
+        }
+        return ids;
+    }
 
     public boolean verifySignature(String contentBase64, String signatureBase64, String publicKeyBase64) {
             try {

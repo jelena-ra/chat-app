@@ -1,13 +1,15 @@
 import IP_ADDRESS from '@/assets/config';
 import { fetchWithAuth } from '@/assets/fetch';
 import { useAuth } from '@/components/AuthContext';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useChatSocket } from '@/components/ChatSocketContext';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { Client, StompSubscription } from "@stomp/stompjs";
+import { StompSubscription } from "@stomp/stompjs";
 import { useLocalSearchParams } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, AppState, AppStateStatus, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { v4 as uuidv4 } from 'uuid';
+
 import 'react-native-get-random-values';
 
 import { TextDecoder, TextEncoder } from 'text-encoding';
@@ -28,7 +30,7 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(true);
   const receiverEmail = Array.isArray(params.receivermail) ? params.receivermail[0] : params.receivermail;
   const sharedKeyRef = useRef<Uint8Array | null>(null);
- 
+
   const [content, setContent] = useState("");
   const [disappearing, setDisappearing] = useState(false);
   const [sharedKey, setSharedKey] = useState<Uint8Array>();
@@ -36,21 +38,21 @@ export default function Chat() {
   const [publicEncryptingKeyReceiver, setPublicEncryptingKeyReceiver] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<Record<string, any>>({});
   const messages = chatMessages[receiverEmail] || [];
-  const stompClient = useRef<Client | null>(null);
-  const [connected, setConnected] = useState(false);
   const subscriptionRef = useRef<StompSubscription | null>(null);
+  const readsubscriptionRef = useRef<StompSubscription | null>(null);
 
-  const { email, token, setToken, privateSigningKey, privateEncryptingKey } = useAuth(); 
+  const { email, token, privateSigningKey, privateEncryptingKey } = useAuth();
+  const { stompClient, connected } = useChatSocket();
 
 
   useEffect(() => {
- console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 0. U prvom sam useeffectu...`);
+    console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 0. U prvom sam useeffectu...`);
     let currentReceiverCryptoKey = publicEncryptingKeyReceiver;
 
     async function receiverKeys() {
       const receiverData = await getPublicKeys(receiverEmail);
-      if (receiverData && privateEncryptingKey !== "" && privateEncryptingKey!== null) {
-        const {  publicEncryptingkey } = receiverData;
+      if (receiverData && privateEncryptingKey !== "" && privateEncryptingKey !== null) {
+        const { publicEncryptingkey } = receiverData;
 
         currentReceiverCryptoKey = publicEncryptingkey;
         setPublicEncryptingKeyReceiver(publicEncryptingkey);
@@ -65,223 +67,226 @@ export default function Chat() {
 
   }, [receiverEmail, privateEncryptingKey])
 
+  useEffect(() => {
+    if (!email || !receiverEmail) return;
+
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState !== 'active') {
+        if (stompClient.current && connected) {
+          stompClient.current.publish({
+            destination: "/socket-subscriber/inactive-chat",
+            body: email
+           
+          });
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription.remove();
+    };
+  }, [email, receiverEmail, connected, stompClient]);
 
 
-  async function refreshAccessToken() {
-    const refreshToken = await SecureStore.getItemAsync('refreshToken');
-    if (!refreshToken) throw new Error('No refresh token found');
-
-    const response = await fetch(`http://${IP_ADDRESS}:8080/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: refreshToken })
-    });
-    const data = await response.json();
-    const newAccessToken = data.accessToken;
-    const newRefreshToken = data.refreshToken;
-
-    await SecureStore.deleteItemAsync('accessToken');
-    await SecureStore.deleteItemAsync('refreshToken');
-
-    await SecureStore.setItemAsync('accessToken', newAccessToken);
-    await SecureStore.setItemAsync('refreshToken', newRefreshToken);
-
-    return newAccessToken;
-  }
-
-
-  async function getValidToken(): Promise<string> {
-    const token = await SecureStore.getItemAsync('accessToken');
-    if (!token) throw new Error('No access token found');
-
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const now = Math.floor(Date.now() / 1000);
-
-    if (payload.exp <= now) {
-      console.log('Token expired, refreshing...');
-      return await refreshAccessToken();
-    }
-    return token;
-  }
 
   useEffect(() => {
     async function SetConnection() {
+      if (!connected || !stompClient.current || !email) return;
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
+      }
 
-      if (!token || !email) return;
-      const tokken = await getValidToken();
-      setToken(tokken);
-
-      if (stompClient.current?.active) return;
-
-      const client = new Client({
-        brokerURL: `ws://${IP_ADDRESS}:8080/socket`,
-        /* webSocketFactory: () => new WebSocket(`ws://${IP_ADDRESS}:8080/socket`),*/
-        connectHeaders: {
-          Authorization: "Bearer " + tokken
-        },
-
-        debug: (msg: any) => console.log(msg),
-        reconnectDelay: 5000,
-
-      });
-      client.onConnect = () => {
-        console.log("Connected to Web Socket");
-        console.log(" STOMP CONNECTED");
-        console.log("Client: ", client);
-        stompClient.current = client;
-        setConnected(true);
-
-        if (subscriptionRef.current) {
-          subscriptionRef.current.unsubscribe();
-        }
-
-        subscriptionRef.current = client.subscribe(`/user/${email}/queue/messages`, (message) => {
+        if (readsubscriptionRef.current) {
+        readsubscriptionRef.current.unsubscribe();
+      }
 
 
-          const receivedMessage = JSON.parse(message.body);
-          const chatKey = receivedMessage.senderEmail === email ? receivedMessage.receiverEmail : receivedMessage.senderEmail;
+      subscriptionRef.current = stompClient.current.subscribe(`/user/${email}/queue/messages`, (message) => {
 
-          if (sharedKeyRef.current) {
-            try {
-              const decrypted = decrypt(sharedKeyRef.current, receivedMessage.content);
-              receivedMessage.content = decrypted;
-            } catch (e) {
-              console.log("WS Decryption error", e);
-            }
 
+        const receivedMessage = JSON.parse(message.body);
+        const chatKey = receivedMessage.senderEmail === email ? receivedMessage.receiverEmail : receivedMessage.senderEmail;
+
+        if (sharedKeyRef.current) {
+          try {
+            const decrypted = decrypt(sharedKeyRef.current, receivedMessage.content);
+            receivedMessage.content = decrypted;
+          } catch (e) {
+            console.log("WS Decryption error", e);
           }
-          console.log("Subscribed:", subscriptionRef.current);
-          setChatMessages((prev) => {
 
-            return {
-              ...prev,
-              [chatKey]: [...(prev[chatKey] || []), receivedMessage]
-            };
-          });
+        }
+        console.log("Subscribed:", subscriptionRef.current);
+        setChatMessages((prev) => {
+
+          return {
+            ...prev,
+            [chatKey]: [...(prev[chatKey] || []), receivedMessage]
+          };
         });
-      };
+      });
 
-      client.onWebSocketError = (error) => {
-        console.error("WS error", error);
-      };
 
-      client.onStompError = (frame) => {
-        console.error("STOMP Error:", frame);
-      };
+       readsubscriptionRef.current = stompClient.current.subscribe (`/user/${email}/queue/read`, (message) => {
 
-      client.onDisconnect = () => {
-        setConnected(false)
-        console.warn("WebSocket disconnected");
-      };
 
-      client.activate();
+        const readUpdate = JSON.parse(message.body);
+        
+            
+        const updatedMessageIds: number[] = readUpdate.messageId || [];
+        console.log("evo ih id:" + updatedMessageIds);
 
+      if (updatedMessageIds.length === 0) return;
+
+      setChatMessages((prev) => {
+        const updatedChats: Record<string, any[]> = {};
+
+        for (const chatKey in prev) {
+          const currentMessages = Array.isArray(prev[chatKey]) ? prev[chatKey] : [];
+
+          updatedChats[chatKey] = currentMessages.map((msg: any) =>
+            updatedMessageIds.includes(msg.clientId)
+              ? { ...msg, read: true }
+              : msg
+
+         
+    );
+
+     console.log("Eco sad sve: ", updatedChats[chatKey]);
+  }
+
+  return {
+    ...prev,
+    ...updatedChats,
+  };
+});
+
+       });
+      }
+       
+
+    SetConnection();
+
+  
+  }, [token, connected, email, stompClient]);
+
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!stompClient.current || !connected) return;
+
+      stompClient.current.publish({
+        destination: "/socket-subscriber/active-chat",
+        body: JSON.stringify({
+          userEmail: email,
+          withUser: receiverEmail
+        })
+      });
 
       return () => {
-        if (client.connected) {
-          console.log("WebSocket disconnecting");
-          client.deactivate();
-          subscriptionRef.current?.unsubscribe();
-          subscriptionRef.current = null;
-        }
+         if (!email) return; 
+        stompClient.current?.publish({
+          destination: "/socket-subscriber/inactive-chat",
+          body: email
+        });
       };
-    }
-    SetConnection();
-  }, [token]);
-
-
- useFocusEffect(
-  useCallback(() => {
-  if (!stompClient.current || !connected) return;
-
-  stompClient.current.publish({
-    destination: "/socket-subscriber/active-chat",
-    body: JSON.stringify({
-      userEmail: email,
-      withUser: receiverEmail
-    })
-  });
-
-  return () => {
-    stompClient.current?.publish({
-      destination: "/socket-subscriber/inactive-chat",
-      body: JSON.stringify({
-        userEmail: email
-      })
-    });
-  };
-}, [receiverEmail, connected, email]));
+    }, [receiverEmail, connected, email, stompClient]));
 
 
   useEffect(() => {
-  let isMounted = true; 
+    let isMounted = true;
 
-  async function populateChat() {
-    if (!email || !receiverEmail || !privateEncryptingKey || !sharedKey || !token) {
-      return;
-    }
-    
-    console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 3. Imam email! Šaljem zahtev na backend...`);
-
-    try {
-      setIsLoading(true);
-      const response = await fetchWithAuth(
-        `http://${IP_ADDRESS}:8080/messages/getfromChat?senderEmail=${email}&receiverEmail=${receiverEmail}`,
-        token
-      );
-      console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 4. Backend je vratio odgovor! Status: ${response.status}`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+    async function populateChat() {
+      if (!email || !receiverEmail || !privateEncryptingKey || !sharedKey || !token) {
+        return;
       }
 
-      const messages = await response.json();
-      
-    
-      if (!isMounted) return; 
+      console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 3. Imam email! Šaljem zahtev na backend...`);
 
-      const filteredkeys = messages.map((msg: any) => {
-        const chatKey = msg.senderEmail === email ? msg.receiverEmail : msg.senderEmail;
-        try {
-          msg.content = decrypt(sharedKey, msg.content);
-        } catch (error) {
-          console.log("error with decryption: " + error);
+      try {
+        setIsLoading(true);
+        const response = await fetchWithAuth(
+          `http://${IP_ADDRESS}:8080/messages/getfromChat?senderEmail=${email}&receiverEmail=${receiverEmail}`,
+          token
+        );
+        console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 4. Backend je vratio odgovor! Status: ${response.status}`);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-        return { ...msg, chatKey };
-      });
 
-      setChatMessages((prev) => ({
+        const messages = await response.json();
+
+
+        if (!isMounted) return;
+
+        const filteredkeys = messages.map((msg: any) => {
+          const chatKey = msg.senderEmail === email ? msg.receiverEmail : msg.senderEmail;
+          try {
+            msg.content = decrypt(sharedKey, msg.content);
+          } catch (error) {
+            console.log("error with decryption: " + error);
+          }
+          return { ...msg, chatKey };
+        });
+
+              setChatMessages((prev) => ({
         ...prev,
         [receiverEmail]: filteredkeys,
       }));
        console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 7.Postavio je poruke u chatMessages`);
 
-    } catch (error) {
-      if (isMounted) {
-        console.error("Error fetching previous messages:", error);
-      }
-    }finally {
-        if (isMounted) setIsLoading(false); 
-      }
+      /*  setChatMessages((prev) => {
+  const existing = prev[receiverEmail] || [];
+  const merged = [...existing];
+
+  for (const msg of filteredkeys) {
+    const alreadyExists = merged.some((m: any) => m.id === msg.id);
+    if (!alreadyExists) {
+      merged.push(msg);
+    }
   }
 
-  populateChat();
+  merged.sort(
+    (a: any, b: any) =>
+      new Date(a.timeSent).getTime() - new Date(b.timeSent).getTime()
+  );
 
-  return () => {
-    isMounted = false; 
+  return {
+    ...prev,
+    [receiverEmail]: merged,
   };
-}, [email, receiverEmail, privateEncryptingKey, sharedKey, token]);
+});
+        console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 7.Postavio je poruke u chatMessages`);*/
+
+      } catch (error) {
+        if (isMounted) {
+          console.error("Error fetching previous messages:", error);
+        }
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    populateChat();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [email, receiverEmail, privateEncryptingKey, sharedKey, token]);
 
 
   async function getPublicKeys(useremail: string) {
-    if(!token){
+    if (!token) {
       console.log("access token not found")
       return;
     }
     try {
 
 
-      const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/users/getPublicKeys?userEmail=${useremail}`,token)
+      const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/users/getPublicKeys?userEmail=${useremail}`, token)
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -310,38 +315,40 @@ export default function Chat() {
 
     const rawContent = content;
     setContent("");
-    if(sharedKey!=null && privateSigningKey!=null){
-    const finalcontent = encrypt(sharedKey, rawContent);
-    const signature = sign(finalcontent, decodeBase64(privateSigningKey));
+    if (sharedKey != null && privateSigningKey != null) {
+      const finalcontent = encrypt(sharedKey, rawContent);
+      const signature = sign(finalcontent, decodeBase64(privateSigningKey));
+      const clientId =  uuidv4();
+      const message = {
+        clientId: clientId,
+        content: finalcontent,
+        signature: signature,
+        timeSent: new Date().toISOString(),
+        senderEmail: email,
+        receiverEmail: receiverEmail,
+        disappearing: disappearing,
+        read:false
+      }
 
-    const message = {
-      content: finalcontent,
-      signature: signature,
-      timeSent: new Date().toISOString(),
-      senderEmail: email,
-      receiverEmail: receiverEmail,
-      disappearing: disappearing,
+      console.log("Sending message:", message);
+      try {
+        client.publish({
+          destination: "/socket-subscriber/send",
+          body: JSON.stringify(message),
+
+        });
+
+      } catch (error) {
+        console.error("Error sending message:", error);
+
+      }
+      message.content = rawContent;
+      setChatMessages((prev) => ({
+        ...prev,
+        [receiverEmail]: [...(prev[receiverEmail] || []), message]
+      }));
+
     }
-
-    console.log("Sending message:", message);
-    try {
-      client.publish({
-        destination: "/socket-subscriber/send",
-        body: JSON.stringify(message),
-
-      });
-
-    } catch (error) {
-      console.error("Error sending message:", error);
-
-    }
-    message.content = rawContent;
-    setChatMessages((prev) => ({
-      ...prev,
-      [receiverEmail]: [...(prev[receiverEmail] || []), message]
-    }));
-  
-  }
   };
 
   const newNonce = () => randomBytes(box.nonceLength);
@@ -391,103 +398,107 @@ export default function Chat() {
 
   }
 
- /* function verifysignature(message: any, signature: any, publicKey: any) {
-    const messageBytes = decodeBase64(message);
-    const signature2 = decodeBase64(signature);
-    return nacl.sign.detached.verify(messageBytes, signature2, publicKey);
-  }*/
+  /* function verifysignature(message: any, signature: any, publicKey: any) {
+     const messageBytes = decodeBase64(message);
+     const signature2 = decodeBase64(signature);
+     return nacl.sign.detached.verify(messageBytes, signature2, publicKey);
+   }*/
   return (
-    <KeyboardAvoidingView 
-    
+    <KeyboardAvoidingView
+
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} 
-       style={{ flex: 1, backgroundColor: '#EFEAE2' }} 
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      style={{ flex: 1, backgroundColor: '#EFEAE2' }}
     >
-       {isLoading ? (
+      {isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="#128C7E" />
         </View>
       ) : (
-  
-
-      <FlatList
-        inverted={true} 
-        data={[...messages].reverse()} 
-        keyboardShouldPersistTaps="handled"
-        keyExtractor={(_, index) => index.toString()}
-        contentContainerStyle={{ paddingBottom: 20 }}
-        renderItem={({ item }) => {
-          const isMe = item.senderEmail === email;
-
-          return (
-            <View
-              style={{
-                alignSelf: isMe ? "flex-end" : "flex-start",
-                marginVertical: 5,
-                maxWidth: "70%",
-              }}
-            >
-
-              <Text style={{ fontSize: 12, color: "gray" }}>
-                {item.senderEmail}
-              </Text>
 
 
+        <FlatList
+          inverted={true}
+          data={[...messages].reverse()}
+          keyboardShouldPersistTaps="handled"
+          keyExtractor={(_, index) => index.toString()}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          renderItem={({ item }) => {
+            const isMe = item.senderEmail === email;
+
+            return (
               <View
                 style={{
-                  backgroundColor: isMe ? "#DCF8C6" : "#ECECEC",
-                  padding: 10,
-                  borderRadius: 10,
+                  alignSelf: isMe ? "flex-end" : "flex-start",
+                  marginVertical: 5,
+                  maxWidth: "70%",
                 }}
               >
-                <Text>
-                  {sharedKey
-                    ? item.content
-                    : "Dekriptovanje..."}
+
+                <Text style={{ fontSize: 12, color: "gray" }}>
+                  {item.senderEmail}
                 </Text>
-                <Text style={{ fontSize: 10, color: "gray", marginTop: 5 }}>
-                  {new Date(item.timeSent).toLocaleTimeString()}
-                </Text>
+
+{/*#DCF8C6 */}
+                <View
+                  style={{
+                    backgroundColor: isMe ? "#dfc490" : "#ececec",
+                    padding: 10,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text>
+                    {sharedKey
+                      ? item.content
+                      : "Dekriptovanje..."}
+                  </Text>
+                  <View style={{ flexDirection:"row", justifyContent:"space-between"}}>
+                  <Text style={{ fontSize: 10, color: "gray", marginTop: 5 }}>
+                    {new Date(item.timeSent).toLocaleTimeString()}
+                  </Text>
+                  {(isMe && !item.read) ? <MaterialIcons name="check" size={13}  /> : null}
+                  {(isMe && item.read) ? <MaterialCommunityIcons name="check-all" size={13} color="#29889d"  /> : null}
+                  </View>
+                </View>
               </View>
-            </View>
-          );
-        }}
-      />
-)}
+            );
+          }}
+        />
+      )}
       <View style={styles.inputContainer}>
-        
+
         <View style={styles.textInputWrapper}>
-          <TextInput 
+          <TextInput
             style={styles.textInput}
-            value={content} 
-            onChangeText={setContent} 
+            value={content}
+            onChangeText={setContent}
             placeholder="Message"
             placeholderTextColor="#888"
             multiline={true}
           />
- 
-          <TouchableOpacity 
-            onPress={() => setDisappearing(!disappearing)} 
+
+          <TouchableOpacity
+            onPress={() => setDisappearing(!disappearing)}
             style={styles.iconButton}
           >
-            <MaterialCommunityIcons 
-              name={disappearing ? "timer" : "timer-off-outline"} 
-              size={24} 
+            <MaterialCommunityIcons
+              name={disappearing ? "timer" : "timer-off-outline"}
+              size={24}
               color={disappearing ? "#128C7E" : "#888"}
             />
           </TouchableOpacity>
         </View>
 
-    
-        <TouchableOpacity 
-          style={[styles.sendButton, { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }]} 
+
+        <TouchableOpacity
+          style={[styles.sendButton, { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }]}
           onPress={sendMessage}
           disabled={!connected || !content.trim()}
         >
           <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
         </TouchableOpacity>
-    </View>
-  
+      </View>
+
     </KeyboardAvoidingView>
   );
 };

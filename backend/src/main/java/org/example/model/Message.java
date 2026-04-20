@@ -19,6 +19,8 @@ public class Message {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    private String clientId;
+
     private String content;
     private String signature;
     private boolean isDisappearing;

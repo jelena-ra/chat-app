@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class MessageDTO {
 
+    private String clientId;
     private String content;
     private String signature;
     private boolean isDisappearing;
@@ -28,13 +29,16 @@ public class MessageDTO {
 
     private String senderEmail;
     private String receiverEmail;
+    private boolean isRead;
 
     public MessageDTO(Message message){
+        this.clientId= message.getClientId();
         this.content= message.getContent();
         this.isDisappearing = message.isDisappearing();
         this.timeSent=message.getTimeSent();
         this.senderEmail=message.getSender().getEmail();
         this.receiverEmail=message.getReceiver().getEmail();
         this.signature = message.getSignature();
+        this.isRead = message.isRead();
     }
 }
