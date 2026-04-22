@@ -3,13 +3,15 @@ import * as SecureStore from 'expo-secure-store';
  
 export const fetchWithAuth = async (url, options = {},token) => {
 
+  const storedtoken = await SecureStore.getItemAsync('accessToken');
+
   let headers = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  if (storedtoken) {
+    headers['Authorization'] = `Bearer ${storedtoken}`;
   }
 
  

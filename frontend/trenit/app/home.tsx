@@ -31,10 +31,11 @@ interface MessageDTO {
 
 interface ChatItem {
     partnerEmail: string;
+    imageUri: string;
     content: string;
     timeSent: string;
     isRead: boolean;
-    senderEmail:string;
+    senderEmail: string;
 }
 
 const publicKeysCache: Record<string, { publicEncryptingkey: string }> = {};
@@ -42,12 +43,12 @@ const publicKeysCache: Record<string, { publicEncryptingkey: string }> = {};
 export default function Home() {
     console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] usao u home...`);
     const router = useRouter();
-
-      const { stompClient, connected } = useChatSocket();
-
+    const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
+    const { stompClient, connected } = useChatSocket();
     const [chats, setChats] = useState<ChatItem[]>([]);
     const { email, token, privateEncryptingKey } = useAuth();
     const subscriptionRef = useRef<StompSubscription | null>(null);
+  
 
 
     async function getMissingPublicKeys(partnerEmails: string[]) {
@@ -93,102 +94,103 @@ export default function Home() {
         return publicKeysCache;
     }
 
-useFocusEffect(
-    useCallback(() => {
-        if (!connected || !stompClient.current || !email) return;
+    useFocusEffect(
+        useCallback(() => {
+            if (!connected || !stompClient.current || !email) return;
 
-        if (subscriptionRef.current) {
-            subscriptionRef.current.unsubscribe();
-        }
-
-        subscriptionRef.current = stompClient.current.subscribe(
-            `/user/${email}/queue/messages`,
-            async (message) => {
-                console.log("HOME dobio novu poruku:", message.body);
-                await getMessages();
+            if (subscriptionRef.current) {
+                subscriptionRef.current.unsubscribe();
             }
-        );
 
-        return () => {
-            subscriptionRef.current?.unsubscribe();
-            subscriptionRef.current = null;
-        };
-    }, [connected, email, token, privateEncryptingKey, stompClient])
-);
-
-async function getMessages() {
-            if (!email || !token) {
-            
-                return;
-            }
-        
-            try {
-                //console.log("getChats fetch:", Date.now() - t0, "ms");
-                const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/messages/getChats?userEmail=${email}`, {
-                    method: 'GET',
-                }, token);
-
-                if (!response.ok) {
-                    throw new Error("HTTP error: " + response.status);
+            subscriptionRef.current = stompClient.current.subscribe(
+                `/user/${email}/queue/messages`,
+                async (message) => {
+                    console.log("HOME dobio novu poruku:", message.body);
+                    await getMessages();
                 }
+            );
 
-                const data = (await response.json()) as Record<string, MessageDTO>;
-                //console.log("getChats + json:", Date.now() - t0, "ms");
+            return () => {
+                subscriptionRef.current?.unsubscribe();
+                subscriptionRef.current = null;
+            };
+        }, [connected, email, token, privateEncryptingKey, stompClient])
+    );
+
+    async function getMessages() {
+        if (!email || !token) {
+            return;
+        }
+        try {
+            //console.log("getChats fetch:", Date.now() - t0, "ms");
+            const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/messages/getChats?userEmail=${email}`, {
+                method: 'GET',
+            }, token);
+
+            if (!response.ok) {
+                throw new Error("HTTP error: " + response.status);
+            }
+
+            const data = (await response.json()) as Record<string, MessageDTO>;
+            //console.log("getChats + json:", Date.now() - t0, "ms");
 
 
-                const partnerEmails = Object.keys(data);
+            const partnerEmails = Object.keys(data);
 
-                const keysByEmail = await getMissingPublicKeys(partnerEmails);
+            const keysByEmail = await getMissingPublicKeys(partnerEmails);
 
-                //const t2 = Date.now();
+            //const t2 = Date.now();
 
-                const transformedChats: ChatItem[] = Object.entries(data).map(
-                    ([partnerEmail, lastMessageDTO]) => {
+            const transformedChats: ChatItem[] = Object.entries(data).map(
+                ([partnerEmail, lastMessageDTO]) => {
 
-                        const partnerKeys = keysByEmail[partnerEmail];
+                    const partnerKeys = keysByEmail[partnerEmail];
 
-                        let content = "";
-                        let senderEmail = "";
+                    let content = "";
+                    let senderEmail = "";
+                    let imageUri = `http://${IP_ADDRESS}:8080/users/profile/image?email=${partnerEmail}`;
 
-                        if(lastMessageDTO.senderEmail!=null){
-                            senderEmail = lastMessageDTO.senderEmail;
-                        }
-
-                        if (partnerKeys?.publicEncryptingkey && privateEncryptingKey) {
-                            const sharedKey = box.before(
-                                decodeBase64(partnerKeys.publicEncryptingkey),
-                                decodeBase64(privateEncryptingKey)
-                            );
-                            content = decrypt(sharedKey, lastMessageDTO.content) ?? "";
-                        }
-                        console.log("Is read? "+lastMessageDTO.read);
-                        return {
-                            partnerEmail,
-                            content,
-                            timeSent: lastMessageDTO.timeSent.slice(5, 16).replace("T", " "),
-                            isRead:lastMessageDTO.read,
-                            senderEmail
-                        };
-
+                    if (lastMessageDTO.senderEmail != null) {
+                        senderEmail = lastMessageDTO.senderEmail;
                     }
 
-                ).sort((a, b) =>
-            new Date(b.timeSent).getTime() - new Date(a.timeSent).getTime()
-            );
-                //console.log("decrypt+transform:", Date.now() - t2, "ms");
-                //console.log("TOTAL:", Date.now() - t0, "ms");
-                
-                setChats(transformedChats);
-                //console.log(`[VRIJEME: ${new Date().toISOString().split('T')[1]}] 6. State Chatova je postavljen (setChats završeno).`);
+                    if (partnerKeys?.publicEncryptingkey && privateEncryptingKey) {
+                        const sharedKey = box.before(
+                            decodeBase64(partnerKeys.publicEncryptingkey),
+                            decodeBase64(privateEncryptingKey)
+                        );
+                        content = decrypt(sharedKey, lastMessageDTO.content) ?? "";
+                        console.log("CONTENT TYPE:", typeof content, content);
+                    }
+                    console.log("Is read? " + lastMessageDTO.read);
+                    return {
+                        partnerEmail,
+                        imageUri,
+                        content,
+                        timeSent: lastMessageDTO.timeSent.slice(5, 16).replace("T", " "),
+                        isRead: lastMessageDTO.read,
+                        senderEmail
+                    };
 
-            } catch (error) {
-                console.log("Error :" + error)
-            }
+                }
+
+            ).sort((a, b) =>
+                new Date(b.timeSent).getTime() - new Date(a.timeSent).getTime()
+            );
+            //console.log("decrypt+transform:", Date.now() - t2, "ms");
+            //console.log("TOTAL:", Date.now() - t0, "ms");
+
+            setChats(transformedChats);
+            //console.log(`[VRIJEME: ${new Date().toISOString().split('T')[1]}] 6. State Chatova je postavljen (setChats završeno).`);
+
+        } catch (error) {
+            console.log("Error :" + error)
         }
-        
+    }
+
     useEffect(() => {
         getMessages();
-    },[email] )
+    }, [email])
 
     function decrypt(secretOrSharedKey: Uint8Array, messageWithNonce: string) {
 
@@ -212,6 +214,14 @@ async function getMessages() {
     };
 
 
+    function handleProfile(){
+        console.log("Usla u handler");
+    router.push({
+        pathname: '/profile',
+        params: { email },
+        });
+}
+
     function handleChatPress(chat: any) {
         router.push({
             pathname: '/chat',
@@ -228,10 +238,21 @@ async function getMessages() {
             <FlatList horizontal={true} style={styles.friendOrccG} data={chats} initialNumToRender={7} maxToRenderPerBatch={7} windowSize={7}
                 keyExtractor={(item) => item.partnerEmail}
                 renderItem={({ item }) => (
-
                     <TouchableOpacity style={{ borderRadius: 55 }}>
                         <View style={styles.friends}>
-                            <Image style={styles.image} source={profileImg}></Image>
+                            <Image style={styles.image} source={
+                                imageErrors[item.partnerEmail]
+                                    ? profileImg
+                                    : item.imageUri
+                                        ? { uri: item.imageUri }
+                                        : profileImg
+                            }
+                                onError={() =>
+                                    setImageErrors((prev) => ({
+                                        ...prev,
+                                        [item.partnerEmail]: true,
+                                    }))
+                                }></Image>
                             <Text numberOfLines={1} style={{ width: 50, fontSize: 10 }}>{item.partnerEmail}</Text>
                         </View>
                     </TouchableOpacity>
@@ -241,25 +262,35 @@ async function getMessages() {
                 keyExtractor={(item) => item.partnerEmail}
                 renderItem={({ item }) => (
                     <TouchableOpacity style={styles.chatCard} onPress={() => handleChatPress(item)}>
-                        <View style={styles.image}><Image source={profileImg} style={styles.profimage}></Image></View>
+                        <View style={styles.image}><Image style={styles.profimage} source={
+                                imageErrors[item.partnerEmail]
+                                    ? profileImg
+                                    : item.imageUri
+                                        ? { uri: item.imageUri }
+                                        : profileImg
+                            }
+                                onError={() =>
+                                    setImageErrors((prev) => ({
+                                        ...prev,
+                                        [item.partnerEmail]: true,
+                                    }))
+                                }></Image></View>
                         <View style={styles.nameAndMssg}>
-                            <View style={styles.name}><Text style={(!item.isRead && item.senderEmail!==email) ? styles.notRead : null}>{item.partnerEmail}</Text>
+                            <View style={styles.name}><Text style={(!item.isRead && item.senderEmail !== email) ? styles.notRead : null}>{item.partnerEmail}</Text>
                             </View>
                             <View style={styles.mssg}><Text numberOfLines={1} ellipsizeMode="tail">{item.content}</Text></View>
                         </View>
                         <View style={styles.notifAndTime}>
                             <View style={styles.name}><Text>{item.timeSent}</Text></View>
-                            {(!item.isRead && item.senderEmail!==email) ? (<View>
+                            {(!item.isRead && item.senderEmail !== email) ? (<View>
                                 <MaterialCommunityIcons
                                     name="circle"
                                     size={16}
                                     color="#e30d0d"
-                                    
-                                     style={{ marginTop: 6, alignSelf: "flex-end",opacity:1 }}
+                                    style={{ marginTop: 6, alignSelf: "flex-end", opacity: 1 }}
                                 />
-                                </View>
-                                ) :  null}
-                            
+                            </View>
+                            ) : null}
                         </View>
                     </TouchableOpacity>)}
             />
@@ -267,7 +298,7 @@ async function getMessages() {
                 <TouchableOpacity ><Ionicons name="call-outline" size={30} color={"#9d6d6d"} /></TouchableOpacity>
                 <TouchableOpacity><Ionicons name="people" size={30} color={"#9d6d6d"} /></TouchableOpacity>
                 <TouchableOpacity><Ionicons name="chatbubble-outline" size={30} color={"#9d6d6d"} /></TouchableOpacity>
-                <TouchableOpacity><Ionicons name="person" size={30} color={"#9d6d6d"} /></TouchableOpacity>
+                <TouchableOpacity onPress={()=>handleProfile()}><Ionicons name="person" size={30} color={"#9d6d6d"} /></TouchableOpacity>
             </View>
         </View>
     )
@@ -330,19 +361,20 @@ const styles = StyleSheet.create({
         borderRadius: 25,
         height: 50,
         width: 50,
-        marginLeft: "10%"
+        marginLeft: "10%",
+        marginTop:10
     },
     nameAndMssg: {
         width: "60%",
     },
     notifAndTime: {
         marginLeft: "auto",
-     flexDirection: "column",
-    alignItems: "flex-end",
-    justifyContent: "center",
-    paddingRight: 10,
-    minWidth: 10,
-   
+        flexDirection: "column",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        paddingRight: 10,
+        minWidth: 10,
+
     },
     name: {},
     mssg: {

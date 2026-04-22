@@ -44,6 +44,11 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
               params: { email: email }
             }}>home</Link></Text>
 
+            <Text><Link  href={{
+              pathname: '/profile',
+              params: { email: email }
+            }}>profile</Link></Text>
+
             <TouchableOpacity onPress={toggleTheme}><Text>Dark mode</Text></TouchableOpacity>
             <Text>{dark ? "DARK" : "LIGHT"}</Text>
         </View>
@@ -73,6 +78,7 @@ const styles = StyleSheet.create({
     zIndex: 99,
   },
   content: {
-    marginTop:50
+    marginTop:50,
+    fontSize:20
   },
 });
