@@ -83,7 +83,6 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<?> refresh(@RequestBody Map<String, String> request) throws Exception {
-
         String refreshToken = request.get("refreshToken");
 
         RefreshToken rt = refreshTokenService.validateRefreshToken(refreshToken);

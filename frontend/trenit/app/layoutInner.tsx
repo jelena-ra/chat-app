@@ -1,13 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
+import { Stack, usePathname, useRouter } from "expo-router";
 import { useState } from "react";
-import { Image, TouchableOpacity, View } from "react-native";
+import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
 import Sidebar from "./sidebar";
 
 
 export default function RootLayoutInner() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    return <>
+      const router = useRouter();
+      const pathname = usePathname();
+
+  const hideBottomBar =
+    pathname === "/registration" || pathname === "/verification";
+    return <View style={styles.container}>
      <Stack
         screenOptions={{
           headerStyle: {
@@ -38,11 +43,32 @@ export default function RootLayoutInner() {
       <Stack.Screen name="verification" />
       <Stack.Screen name="chat" />
       </Stack>
+
+      {!hideBottomBar ? <View style={styles.plus}>
+                      <TouchableOpacity ><Ionicons name="call-outline" size={30} color={"#9d6d6d"} /></TouchableOpacity>
+                      <TouchableOpacity><Ionicons name="people" size={30} color={"#9d6d6d"} /></TouchableOpacity>
+                      <TouchableOpacity onPress={() => router.push("/home")} ><Ionicons name="chatbubble-outline" size={30} color={"#9d6d6d"} /></TouchableOpacity>
+                      <TouchableOpacity onPress={() => router.push("/profile")}><Ionicons name="person" size={30} color={"#9d6d6d"} /></TouchableOpacity>
+                  </View> : null}
+
     <Sidebar
     visible={sidebarOpen}
     onClose={() => setSidebarOpen(false)}
     />
-   </>
+   </View>
 
 ;
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  plus: {
+    backgroundColor: "#5a3e36",
+    height: 40,
+    flexDirection: "row",
+    justifyContent: "space-evenly",
+    alignItems: "center",
+  },
+})

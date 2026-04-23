@@ -27,6 +27,11 @@ public class AuthTokenFilter extends OncePerRequestFilter {
         try {
 
             String jwt = parseJwt(request);
+            String path = request.getServletPath();
+            if (path.equals("/auth/refresh")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
 
             if(jwt !=null && jwtUtil.validateToken(jwt)){
                 User user = userService.getById( jwtUtil.getUserIdFromToken(jwt));

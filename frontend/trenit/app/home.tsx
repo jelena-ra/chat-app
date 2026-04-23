@@ -294,12 +294,6 @@ export default function Home() {
                         </View>
                     </TouchableOpacity>)}
             />
-            <View style={styles.plus}>
-                <TouchableOpacity ><Ionicons name="call-outline" size={30} color={"#9d6d6d"} /></TouchableOpacity>
-                <TouchableOpacity><Ionicons name="people" size={30} color={"#9d6d6d"} /></TouchableOpacity>
-                <TouchableOpacity><Ionicons name="chatbubble-outline" size={30} color={"#9d6d6d"} /></TouchableOpacity>
-                <TouchableOpacity onPress={()=>handleProfile()}><Ionicons name="person" size={30} color={"#9d6d6d"} /></TouchableOpacity>
-            </View>
         </View>
     )
 }
