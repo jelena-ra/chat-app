@@ -23,6 +23,9 @@ export default function Registration(){
             method:'POST',
            
       body: JSON.stringify({ number, email }),
+       headers: {
+    'Content-Type': 'application/json',
+  },
     });
 
       if (!response.ok) {
@@ -46,10 +49,7 @@ router.push({
         console.log(error)
         return;
     }
-
-
 }
-
  const handleLogin = async()=>{
     try{
         router.push({

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.data.jpa.repository.Modifying;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface MessageRepository extends JpaRepository<Message, Long> {
@@ -72,5 +73,9 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
       AND m.isRead = false
 """)
     int markAllAsReadInChat(@Param("email") String email, @Param("friendEmail") String friendEmail);
+
+    Optional<Message> findTopByGroup_IdOrderByTimeSentDesc(Long groupId);
+
+    List<Message> findAllByGroup_IdOrderByTimeSentAsc(Long groupId);
 
 }

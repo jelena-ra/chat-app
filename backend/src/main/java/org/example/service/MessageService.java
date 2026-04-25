@@ -1,7 +1,9 @@
 package org.example.service;
 
 import jakarta.transaction.Transactional;
+import org.example.dtos.GroupChatDTO;
 import org.example.dtos.MessageDTO;
+import org.example.model.Group;
 import org.example.model.Message;
 import org.example.model.User;
 import org.example.repository.MessageRepository;
@@ -27,11 +29,67 @@ public class MessageService {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private GroupService groupService;
+
     public Message saveMessage(MessageDTO message){
         User sender = userService.getByEmail(message.getSenderEmail());
-        User receiver = userService.getByEmail(message.getReceiverEmail());
-        Message mess = new Message(null,message.getClientId(),message.getContent(), message.getSignature() , message.isDisappearing(),false, false, message.isRead(), LocalDateTime.now(),sender, receiver);
+        User receiver = null;
+        if (message.getReceiverEmail() != null) {
+            receiver = userService.getByEmail(message.getReceiverEmail());
+        }
+        Group group = null;
+        if(message.getGroupId()!=null){
+         group = groupService.getById(message.getGroupId());
+            }
+        Message mess = new Message(null,message.getClientId(),message.getContent(), message.getSignature() , message.isDisappearing(),false, false, message.isRead(), LocalDateTime.now(),sender, receiver, group);
         return _messageRepository.save(mess);
+    }
+
+    public List<MessageDTO> getGroupMessages(Long groupId) {
+        List<Message> messages = _messageRepository.findAllByGroup_IdOrderByTimeSentAsc(groupId);
+
+        List<MessageDTO> dtos = new ArrayList<>();
+
+        for (Message message : messages) {
+            dtos.add(new MessageDTO(message));
+        }
+
+        return dtos;
+    }
+
+    public List<GroupChatDTO> getGroupChatPreviews(String email) {
+
+        List<Group> groups = groupService.getMyGroups(email);
+
+        List<GroupChatDTO> previews = new ArrayList<>();
+
+        for (Group group : groups) {
+
+            Message lastMessage = _messageRepository
+                    .findTopByGroup_IdOrderByTimeSentDesc(group.getId())
+                    .orElse(null);
+
+            if (lastMessage == null) {
+                previews.add(new GroupChatDTO(
+                        group.getId(),
+                        group.getName(),
+                        null,
+                        null,
+                        null
+                ));
+            } else {
+                previews.add(new GroupChatDTO(
+                        group.getId(),
+                        group.getName(),
+                        lastMessage.getContent(),
+                        lastMessage.getTimeSent().toString(),
+                        lastMessage.getSender().getEmail()
+                ));
+            }
+        }
+
+        return previews;
     }
 
     public List<MessageDTO> getFromChat(String senderEmail, String receiverEmail){
@@ -71,7 +129,8 @@ public class MessageService {
                         p.getTimeSent(),
                         p.getSenderEmail(),
                         p.getReceiverEmail(),
-                        p.getRead()
+                        p.getRead(),
+                        p.getGroupId()
                 ))
                 .collect(Collectors.toMap(
                         msg -> msg.getSenderEmail().equals(userEmail)

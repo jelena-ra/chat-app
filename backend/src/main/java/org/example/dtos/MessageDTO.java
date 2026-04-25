@@ -30,6 +30,7 @@ public class MessageDTO {
     private String senderEmail;
     private String receiverEmail;
     private boolean isRead;
+    private Long groupId;
 
     public MessageDTO(Message message){
         this.clientId= message.getClientId();
@@ -37,8 +38,14 @@ public class MessageDTO {
         this.isDisappearing = message.isDisappearing();
         this.timeSent=message.getTimeSent();
         this.senderEmail=message.getSender().getEmail();
-        this.receiverEmail=message.getReceiver().getEmail();
+        this.receiverEmail = message.getReceiver() != null
+                ? message.getReceiver().getEmail()
+                : null;
         this.signature = message.getSignature();
         this.isRead = message.isRead();
+        if(message.getGroup() != null){
+        this.groupId = message.getGroup().getId();}else{
+            this.groupId=null;
+        }
     }
 }

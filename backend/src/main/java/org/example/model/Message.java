@@ -40,8 +40,12 @@ public class Message {
 
 
     @ManyToOne
-    @JoinColumn(name="receiver_id")
+    @JoinColumn(name="receiver_id", nullable = true)
     private User receiver;
+
+    @ManyToOne
+    @JoinColumn(name = "group_id", nullable = true)
+    private Group group;
 
 
 }

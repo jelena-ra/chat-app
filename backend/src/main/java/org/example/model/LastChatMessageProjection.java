@@ -9,4 +9,5 @@ public interface LastChatMessageProjection {
     String getSenderEmail();
     String getReceiverEmail();
     boolean getRead();
+    Long getGroupId();
 }

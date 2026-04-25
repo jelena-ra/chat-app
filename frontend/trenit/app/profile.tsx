@@ -65,7 +65,7 @@ export default function Profile() {
 
         try {
             setSaving(true);
-            console.log("Evo kako birthdate izgleda: "+ birthdate);
+            console.log("Evo kako birthdate izgleda: " + birthdate);
 
             const response = await fetchWithAuth(
                 `http://${IP_ADDRESS}:8080/users/profile/edit`,
@@ -116,10 +116,10 @@ export default function Profile() {
             setName(data.name ?? '');
             setSurname(data.surname ?? '');
             setDate(data.birthdate ?? '');
-            console.log("Evo ga birthdate: "+ data.birthdate);
+            console.log("Evo ga birthdate: " + data.birthdate);
             if (data.birthdate) {
-    setDate(new Date(data.birthdate));
-}
+                setDate(new Date(data.birthdate));
+            }
         } catch (error) {
             console.log(error);
         }
@@ -241,11 +241,6 @@ export default function Profile() {
                                 }
                             }}
                         />
-
-
-
-
-
                         <View style={styles.buttonWrap}>
                             <Button
                                 label={saving ? 'Saving...' : 'Save changes'}

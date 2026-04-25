@@ -45,8 +45,8 @@ export default function RootLayoutInner() {
       </Stack>
 
       {!hideBottomBar ? <View style={styles.plus}>
-                      <TouchableOpacity ><Ionicons name="call-outline" size={30} color={"#9d6d6d"} /></TouchableOpacity>
-                      <TouchableOpacity><Ionicons name="people" size={30} color={"#9d6d6d"} /></TouchableOpacity>
+                      <TouchableOpacity onPress={() => {console.log("CLICKED");router.push("/newGroup")}}><Ionicons name="call-outline" size={30} color={"#9d6d6d"}   /></TouchableOpacity>
+                      <TouchableOpacity onPress={() => router.push("/grouphome")}  ><Ionicons name="people" size={30} color={"#9d6d6d"} /></TouchableOpacity>
                       <TouchableOpacity onPress={() => router.push("/home")} ><Ionicons name="chatbubble-outline" size={30} color={"#9d6d6d"} /></TouchableOpacity>
                       <TouchableOpacity onPress={() => router.push("/profile")}><Ionicons name="person" size={30} color={"#9d6d6d"} /></TouchableOpacity>
                   </View> : null}
