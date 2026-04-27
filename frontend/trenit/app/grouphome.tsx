@@ -17,6 +17,7 @@ interface GroupChatItem {
   lastMessageContent: string | null;
   lastMessageTime: string | null;
   lastSenderEmail: string | null;
+  lastMessageRead: boolean;
 }
 
 
@@ -127,11 +128,11 @@ const groupSubscriptionsRef = useRef<StompSubscription[]>([]);
             </View>
 
             <View style={styles.nameAndMssg}>
-              <Text style={styles.groupName}>{item.groupName}</Text>
+              <Text style={(!item.lastMessageRead && item.lastSenderEmail !== email) ? styles.notRead : styles.groupName}>{item.groupName}</Text>
 
               <Text numberOfLines={1} ellipsizeMode="tail" style={styles.message}>
                 {item.lastSenderEmail
-                  ? `${item.lastSenderEmail}: ${item.lastMessageContent ?? ''}`
+                  ? 'Click to see more'
                   : 'No messages yet'}
               </Text>
             </View>
@@ -140,8 +141,18 @@ const groupSubscriptionsRef = useRef<StompSubscription[]>([]);
               <Text style={styles.timeText}>
                 {item.lastMessageTime
                   ? item.lastMessageTime.slice(5, 16).replace('T', ' ')
-                  : ''}
-              </Text>
+                  : ''}</Text>
+
+                   {(!item.lastMessageRead && item.lastSenderEmail !== email) ? (<View>
+                                <MaterialCommunityIcons
+                                    name="circle"
+                                    size={16}
+                                    color="#e30d0d"
+                                    style={{ marginTop: 6, alignSelf: "flex-end", opacity: 1 }}
+                                />
+                            </View>
+                            ) : null}
+              
             </View>
           </TouchableOpacity>
         )}
@@ -201,6 +212,10 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     justifyContent: 'center',
   },
+  notRead:{
+fontWeight: 'bold',
+    color: '#090808',
+  },
   groupName: {
     fontWeight: 'bold',
     color: '#453e3e',
@@ -210,12 +225,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   timeBox: {
-    marginLeft: 'auto',
-    justifyContent: 'center',
-    paddingRight: 10,
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingRight: 50,
+        marginRight:50,
+        minWidth: 10,
   },
   timeText: {
-    fontSize: 12,
+    fontSize: 11,
     color: 'gray',
   },
 });

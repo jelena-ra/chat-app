@@ -10,6 +10,7 @@ import { useAuth } from '@/components/AuthContext';
 import { useChatSocket } from '@/components/ChatSocketContext';
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+
 import { StompSubscription } from '@stomp/stompjs';
 import { useLocalSearchParams } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -41,6 +42,19 @@ export default function GroupChat() {
   const [isLoading, setIsLoading] = useState(true);
 
   const subscriptionRef = useRef<StompSubscription | null>(null);
+
+
+  useEffect(() => {
+  if (!stompClient.current || !connected || !email || !groupId) return;
+
+  stompClient.current.publish({
+    destination: "/socket-subscriber/active-group-chat",
+    body: JSON.stringify({
+      userEmail: email,
+      groupId: groupId,
+    }),
+  });
+}, [connected, email, groupId, stompClient]);
 
   useEffect(() => {
     async function loadGroupKey() {

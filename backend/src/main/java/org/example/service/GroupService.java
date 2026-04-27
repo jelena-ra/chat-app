@@ -1,6 +1,6 @@
 package org.example.service;
 
-import org.example.dtos.GroupChatDTO;
+
 import org.example.model.Group;
 import org.example.model.User;
 import org.example.repository.GroupRepository;

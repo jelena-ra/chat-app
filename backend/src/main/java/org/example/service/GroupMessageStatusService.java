@@ -53,6 +53,10 @@ public class GroupMessageStatusService {
             }
         }
     }
+    public GroupMessageStatus getByEmailAndMessageId(String email, Long messageId) {
+        return groupMessageStatusRepository
+                .findByUser_EmailAndMessage_Id(email, messageId);
+    }
 
     @Transactional
     public int markGroupAsRead(String email, Long groupId) {

@@ -16,4 +16,5 @@ public class GroupChatDTO {
     private String lastMessageContent;
     private String lastMessageTime;
     private String lastSenderEmail;
+    private boolean lastMessageRead;
 }

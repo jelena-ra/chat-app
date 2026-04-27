@@ -1,7 +1,7 @@
 import IP_ADDRESS from '@/assets/config';
 import Button from '@/components/Button';
 import Background from '@/components/GlobalBackground';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View, } from 'react-native';
@@ -106,16 +106,16 @@ return(
   onChangeText={setEmail} placeholder='Enter email' placeholderTextColor="#999" ></TextInput>
             <View style={styles.button}>
                 <Button label="Get Started ->" onPress={handleRegister}/>
-                  <Button label="Login ->" onPress={handleLogin}/>
+                {/* <Button label="Login ->" onPress={handleLogin}/>*/ } 
             </View>
-            <Text><Link  href={{
+        {/*    <Text><Link  href={{
     pathname: '/verification',
     params: { email: email }
   }}>verification</Link></Text>
   <Text><Link  href={{
     pathname: '/home',
     params: { email: email }
-  }}>home</Link></Text>
+  }}>home</Link></Text>*/ } 
             </View>
         </View>
     </View>

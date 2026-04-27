@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 public interface GroupMessageStatusRepository extends JpaRepository<GroupMessageStatus, Long> {
 
@@ -19,7 +20,10 @@ public interface GroupMessageStatusRepository extends JpaRepository<GroupMessage
     """)
     int markGroupMessagesAsRead(String email, Long groupId);
 
+
     boolean existsByUser_EmailAndMessage_Group_IdAndReadFalse(String email, Long groupId);
 
     boolean existsByUser_EmailAndMessage_IdAndReadFalse(String email, Long messageId);
+
+    GroupMessageStatus findByUser_EmailAndMessage_Id(String email, Long messageId);
 }

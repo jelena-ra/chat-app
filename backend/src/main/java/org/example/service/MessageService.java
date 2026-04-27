@@ -4,6 +4,7 @@ import jakarta.transaction.Transactional;
 import org.example.dtos.GroupChatDTO;
 import org.example.dtos.MessageDTO;
 import org.example.model.Group;
+import org.example.model.GroupMessageStatus;
 import org.example.model.Message;
 import org.example.model.User;
 import org.example.repository.MessageRepository;
@@ -31,6 +32,9 @@ public class MessageService {
 
     @Autowired
     private GroupService groupService;
+
+    @Autowired
+    private GroupMessageStatusService groupMessageStatusService;
 
     public Message saveMessage(MessageDTO message){
         User sender = userService.getByEmail(message.getSenderEmail());
@@ -70,21 +74,29 @@ public class MessageService {
                     .findTopByGroup_IdOrderByTimeSentDesc(group.getId())
                     .orElse(null);
 
+
+
             if (lastMessage == null) {
                 previews.add(new GroupChatDTO(
                         group.getId(),
                         group.getName(),
                         null,
                         null,
-                        null
+                        null,
+                        true
                 ));
             } else {
+
+                GroupMessageStatus gs = groupMessageStatusService.getByEmailAndMessageId(email, lastMessage.getId());
+
+
                 previews.add(new GroupChatDTO(
                         group.getId(),
                         group.getName(),
                         lastMessage.getContent(),
                         lastMessage.getTimeSent().toString(),
-                        lastMessage.getSender().getEmail()
+                        lastMessage.getSender().getEmail(),
+                        gs!=null && gs.isRead()
                 ));
             }
         }
