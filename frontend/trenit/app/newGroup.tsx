@@ -1,5 +1,6 @@
 import IP_ADDRESS from '@/assets/config';
 import { fetchWithAuth } from '@/assets/fetch';
+import { friendsCache } from "@/assets/friendsCached";
 import { useAuth } from '@/components/AuthContext';
 import Button from '@/components/Button';
 import Background from '@/components/GlobalBackground';
@@ -15,7 +16,8 @@ import {
     StyleSheet,
     Text,
     TextInput,
-    View,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { box, randomBytes } from 'tweetnacl';
 import { decodeBase64, encodeBase64 } from 'tweetnacl-util';
@@ -27,18 +29,31 @@ interface PublicKeyDTO {
 
 export default function NewGroup() {
   const { email, token, privateEncryptingKey } = useAuth();
+const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
 
+const friends = Object.keys(friendsCache).filter(
+  (email) => friendsCache[email] === true
+);
   const [groupName, setGroupName] = useState('');
   const [membersText, setMembersText] = useState('');
   const [creating, setCreating] = useState(false);
 
+
+  function toggleMember(friendEmail: string) {
+  setSelectedMembers((prev) =>
+    prev.includes(friendEmail)
+      ? prev.filter((m) => m !== friendEmail)
+      : [...prev, friendEmail]
+  );
+}
+
   function parseMembers() {
-    const members = membersText
+   /* const members = membersText
       .split(',')
       .map((m) => m.trim())
       .filter((m) => m.length > 0);
-
-    const unique = Array.from(new Set(members));
+*/
+    const unique = Array.from(new Set(selectedMembers));
 
     if (email && !unique.includes(email)) {
       unique.push(email);
@@ -210,15 +225,27 @@ export default function NewGroup() {
               onChangeText={setGroupName}
             />
 
-            <Text style={styles.label}>Members</Text>
-            <TextInput
-              style={[styles.input, styles.membersInput]}
-              placeholder="friend1@gmail.com, friend2@gmail.com"
-              placeholderTextColor="#999"
-              value={membersText}
-              onChangeText={setMembersText}
-              multiline
-            />
+           <Text style={styles.label}>Members</Text>
+
+<View>
+  {friends.map((item) => {
+    const selected = selectedMembers.includes(item);
+
+    return (
+      <TouchableOpacity
+        key={item}
+        style={[styles.friendItem, selected && styles.friendItemSelected]}
+        onPress={() => toggleMember(item)}
+      >
+        <Text style={styles.friendText}>{item}</Text>
+
+        {selected && (
+          <Ionicons name="checkmark-circle" size={20} color="#5a3e36" />
+        )}
+      </TouchableOpacity>
+    );
+  })}
+</View>
 
             <View style={styles.infoBox}>
               <Ionicons name="lock-closed" size={18} color="#7a5650" />
@@ -317,10 +344,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ebe3e3',
   },
-  membersInput: {
-    minHeight: 95,
-    textAlignVertical: 'top',
-  },
+ friendItem: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  padding: 12,
+  borderRadius: 10,
+  backgroundColor: "#f5f5f5",
+  marginBottom: 6,
+},
+
+friendItemSelected: {
+  backgroundColor: "#e8d7c5",
+},
+
+friendText: {
+  fontSize: 14,
+  color: "#333",
+},
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',

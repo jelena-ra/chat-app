@@ -151,41 +151,4 @@ public class MessageController {
         List<MessageDTO> messages = _messageService.getGroupMessages(groupId);
         return ResponseEntity.ok(messages);
     }
-
-    /*@MessageMapping("/group/{groupId}")
-    public void sendGroupMessage(@RequestBody MessageDTO message) {
-
-        Long groupId = message.getGroupId();
-        Group group = groupService.getById(groupId);
-        if (group != null && (  (group.getMembers().stream().anyMatch(member -> member.getEmail().equals(message.getSenderEmail())))|| (group.getAdmin().getEmail().equals(message.getSenderEmail()))  )) {
-
-            var sender = _userService.getByEmail(message.getSenderEmail());
-
-            boolean isValid = _messageService.verifySignature(
-                    message.getContent(),
-                    message.getSignature(),
-                    sender.getPublicKeySigning()
-            );
-
-            if (!isValid) {
-                System.out.println("INVALID SIGNATURE");
-                return;
-            }
-
-            message.setTimeSent(LocalDateTime.now());
-            _messageService.saveMessage(message);
-
-            String destination = "/topic/group/" + message.getGroupId();
-            messagingTemplate.convertAndSend(destination, message);
-
-
-            System.out.println("Grupna poruka za: " + group.getName());
-            System.out.println("GRupna poruka naa: " + destination);
-            System.out.println("poruka glasi: " + message.getContent());
-            System.out.println("poruka od: " + message.getSenderEmail());
-
-        } else {
-            System.out.println("Group not found or sender is not a member.");
-        }
-    }*/
 }

@@ -33,6 +33,34 @@ export default function Profile() {
 
     useEffect(() => {
         if (!email || !token) return;
+
+         async function getProfile() {
+        try {
+            const response = await fetchWithAuth(
+                `http://${IP_ADDRESS}:8080/users/profile?email=${email}`,
+                {
+                    method: 'GET',
+                },
+                token
+            );
+
+            if (!response.ok) {
+                throw new Error('Failed to load profile');
+            }
+
+            const data = await response.json();
+            setName(data.name ?? '');
+            setSurname(data.surname ?? '');
+            setDate(data.birthdate ?? '');
+            console.log("Evo ga birthdate: " + data.birthdate);
+            if (data.birthdate) {
+                setDate(new Date(data.birthdate));
+            }
+        } catch (error) {
+            console.log(error);
+        }
+    }
+    
         getProfile();
         setImageUri(`http://${IP_ADDRESS}:8080/users/profile/image?email=${email}`);
 
@@ -98,32 +126,7 @@ export default function Profile() {
     };
 
 
-    async function getProfile() {
-        try {
-            const response = await fetchWithAuth(
-                `http://${IP_ADDRESS}:8080/users/profile?email=${email}`,
-                {
-                    method: 'GET',
-                },
-                token
-            );
-
-            if (!response.ok) {
-                throw new Error('Failed to load profile');
-            }
-
-            const data = await response.json();
-            setName(data.name ?? '');
-            setSurname(data.surname ?? '');
-            setDate(data.birthdate ?? '');
-            console.log("Evo ga birthdate: " + data.birthdate);
-            if (data.birthdate) {
-                setDate(new Date(data.birthdate));
-            }
-        } catch (error) {
-            console.log(error);
-        }
-    }
+   
 
     const handleUploadImage = async () => {
         if (!email || !token || !imageUri || imageUri.startsWith('http')) return;

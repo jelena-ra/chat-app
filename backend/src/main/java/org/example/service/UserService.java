@@ -13,10 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class UserService {
@@ -73,6 +70,10 @@ public class UserService {
     }
     public User getByEmail(String email){
         return _userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    public Optional<User> findByEmail(String email){
+        return _userRepository.findByEmail(email);
     }
     public User getById(Long id){
         return _userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));

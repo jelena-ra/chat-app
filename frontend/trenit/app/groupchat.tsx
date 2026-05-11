@@ -8,14 +8,16 @@ import {
 } from '@/assets/groupcrypto';
 import { useAuth } from '@/components/AuthContext';
 import { useChatSocket } from '@/components/ChatSocketContext';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { StompSubscription } from '@stomp/stompjs';
-import { useLocalSearchParams } from 'expo-router';
+
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -35,6 +37,9 @@ export default function GroupChat() {
 
   const { email, token, privateSigningKey, privateEncryptingKey  } = useAuth();
   const { stompClient, connected } = useChatSocket();
+
+  const [addMemberVisible, setAddMemberVisible] = useState(false);
+const [newMemberEmail, setNewMemberEmail] = useState('');
 
   const [content, setContent] = useState('');
   const [messages, setMessages] = useState<GroupMessageDTO[]>([]);
@@ -150,7 +155,41 @@ if (!myGroupKey) {
     loadOldMessages();
   }, [groupId, token, groupKey]);
 
+async function handleAddMember() {
+  if (!email || !token || !groupId || !newMemberEmail.trim()) {
+    Alert.alert('Error', 'Enter email.');
+    return;
+  }
 
+  try {
+    const response = await fetchWithAuth(
+      `http://${IP_ADDRESS}:8080/groups/add-member`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          groupId,
+          memberEmail: newMemberEmail.trim(),
+          requesterEmail: email,
+        }),
+      },
+      token
+    );
+
+    if (!response.ok) {
+      throw new Error(`Add member failed: ${response.status}`);
+    }
+
+    Alert.alert('Success', 'Member added.');
+    setNewMemberEmail('');
+    setAddMemberVisible(false);
+  } catch (error) {
+    console.log('Add member error:', error);
+    Alert.alert('Error', 'Could not add member.');
+  }
+}
 
  useEffect(() => {
   if (!connected || !stompClient.current || !groupId || !groupKey) return;
@@ -224,16 +263,29 @@ if (!myGroupKey) {
   };
 
   return (
+
+    
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       style={{ flex: 1, backgroundColor: '#EFEAE2' }}
     >
+        <Stack.Screen
+  options={{
+    headerRight: () => (
+      <TouchableOpacity onPress={() => setAddMemberVisible(true)}>
+        <MaterialCommunityIcons name="dots-vertical" size={26} color="#745858" />
+      </TouchableOpacity>
+    ),
+  }}
+/>
       {isLoading ? (
         <View style={styles.loader}>
           <ActivityIndicator size="large" color="#128C7E" />
         </View>
       ) : (
+
+        
         <FlatList
           inverted
           data={[...messages].reverse()}
@@ -270,7 +322,43 @@ if (!myGroupKey) {
           }}
         />
       )}
+<Modal
+  visible={addMemberVisible}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setAddMemberVisible(false)}
+>
+  <View style={styles.modalOverlay}>
+    <View style={styles.modalCard}>
+      <Text style={styles.modalTitle}>Add member</Text>
 
+      <TextInput
+        style={styles.modalInput}
+        placeholder="Enter user email"
+        placeholderTextColor="#999"
+        value={newMemberEmail}
+        onChangeText={setNewMemberEmail}
+        autoCapitalize="none"
+      />
+
+      <View style={styles.modalButtons}>
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={() => setAddMemberVisible(false)}
+        >
+          <Text style={styles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={handleAddMember}
+        >
+          <Text style={styles.addText}>Add</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
       <View style={styles.inputContainer}>
         <View style={styles.textInputWrapper}>
           <TextInput
@@ -335,4 +423,59 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  modalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.35)',
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+modalCard: {
+  width: '85%',
+  backgroundColor: '#fff',
+  borderRadius: 22,
+  padding: 20,
+  shadowColor: '#000',
+  shadowOffset: { width: 3, height: 3 },
+  shadowOpacity: 0.25,
+  shadowRadius: 8,
+  elevation: 10,
+},
+modalTitle: {
+  fontFamily: 'Georgia',
+  fontSize: 20,
+  fontWeight: 'bold',
+  color: '#5e411a',
+  marginBottom: 14,
+},
+modalInput: {
+  backgroundColor: '#f5f5f5',
+  borderRadius: 14,
+  paddingVertical: 14,
+  paddingHorizontal: 14,
+  borderWidth: 1,
+  borderColor: '#ebe3e3',
+  marginBottom: 18,
+},
+modalButtons: {
+  flexDirection: 'row',
+  justifyContent: 'flex-end',
+},
+cancelButton: {
+  paddingVertical: 10,
+  paddingHorizontal: 14,
+  marginRight: 8,
+},
+addButton: {
+  backgroundColor: '#7a5650',
+  borderRadius: 12,
+  paddingVertical: 10,
+  paddingHorizontal: 18,
+},
+cancelText: {
+  color: '#5f5555',
+},
+addText: {
+  color: '#fff',
+  fontWeight: 'bold',
+},
 });

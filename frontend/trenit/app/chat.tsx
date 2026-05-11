@@ -49,6 +49,29 @@ export default function Chat() {
     console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 0. U prvom sam useeffectu...`);
     let currentReceiverCryptoKey = publicEncryptingKeyReceiver;
 
+    
+  async function getPublicKeys(useremail: string) {
+    if (!token) {
+      console.log("access token not found")
+      return;
+    }
+    try {
+
+
+      const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/users/getPublicKeys?userEmail=${useremail}`, token)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return data;
+
+
+    } catch (error) {
+      console.error("Error fetching previous messages:", error);
+    }
+  }
+
+
     async function receiverKeys() {
       const receiverData = await getPublicKeys(receiverEmail);
       if (receiverData && privateEncryptingKey !== "" && privateEncryptingKey !== null) {
@@ -65,7 +88,7 @@ export default function Chat() {
     receiverKeys();
 
 
-  }, [receiverEmail, privateEncryptingKey])
+  }, [receiverEmail, privateEncryptingKey, token, publicEncryptingKeyReceiver])
 
   useEffect(() => {
     if (!email || !receiverEmail) return;
@@ -109,7 +132,7 @@ export default function Chat() {
         const receivedMessage = JSON.parse(message.body);
         const chatKey = receivedMessage.senderEmail === email ? receivedMessage.receiverEmail : receivedMessage.senderEmail;
 
-        if (sharedKeyRef.current) {
+        if (sharedKeyRef.current && !receivedMessage.disappearing) {
           try {
             const decrypted = decrypt(sharedKeyRef.current, receivedMessage.content);
             receivedMessage.content = decrypted;
@@ -117,6 +140,9 @@ export default function Chat() {
             console.log("WS Decryption error", e);
           }
 
+        }
+        if(receivedMessage.disappearing){
+          receivedMessage.content ="disappearing..."
         }
         console.log("Subscribed:", subscriptionRef.current);
         setChatMessages((prev) => {
@@ -253,27 +279,6 @@ export default function Chat() {
     };
   }, [email, receiverEmail, privateEncryptingKey, sharedKey, token]);
 
-
-  async function getPublicKeys(useremail: string) {
-    if (!token) {
-      console.log("access token not found")
-      return;
-    }
-    try {
-
-
-      const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/users/getPublicKeys?userEmail=${useremail}`, token)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      return data;
-
-
-    } catch (error) {
-      console.error("Error fetching previous messages:", error);
-    }
-  }
 
 
   const sendMessage = async () => {

@@ -10,7 +10,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import 'text-encoding';
 import { box } from "tweetnacl";
 import { decodeBase64, encodeUTF8 } from 'tweetnacl-util';
@@ -48,8 +48,10 @@ export default function Home() {
     const [chats, setChats] = useState<ChatItem[]>([]);
     const { email, token, privateEncryptingKey } = useAuth();
     const subscriptionRef = useRef<StompSubscription | null>(null);
-  
-
+    const [searchText, setSearchText] = useState("");
+    const filteredChats = chats.filter((chat) =>
+        chat.partnerEmail.toLowerCase().includes(searchText.toLowerCase())
+    );
 
     async function getMissingPublicKeys(partnerEmails: string[]) {
         if (!token) return {};
@@ -213,15 +215,6 @@ export default function Home() {
         return JSON.parse(base64DecryptedMessage);
     };
 
-
-    function handleProfile(){
-        console.log("Usla u handler");
-    router.push({
-        pathname: '/profile',
-        params: { email },
-        });
-}
-
     function handleChatPress(chat: any) {
         router.push({
             pathname: '/chat',
@@ -233,7 +226,23 @@ export default function Home() {
         <View style={styles.page}>
             <Background />
             <View style={styles.search}>
-                <TouchableOpacity style={styles.searchTouch}><Ionicons name="search" size={30} color="#000" /><Text >Search</Text></TouchableOpacity>
+                <View style={styles.searchTouch}>
+                    <Ionicons name="search" size={28} color="#000" />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search contacts"
+                        value={searchText}
+                        onChangeText={setSearchText}
+                        autoCapitalize="none"
+                    />
+
+                    {searchText.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchText("")}>
+                            <Ionicons name="close-circle" size={22} color="#625252" />
+                        </TouchableOpacity>
+                    )}
+                </View>
+
             </View>
             <FlatList horizontal={true} style={styles.friendOrccG} data={chats} initialNumToRender={7} maxToRenderPerBatch={7} windowSize={7}
                 keyExtractor={(item) => item.partnerEmail}
@@ -258,23 +267,23 @@ export default function Home() {
                     </TouchableOpacity>
                 )}
             />
-            <FlatList style={styles.chats} data={chats}
+            <FlatList style={styles.chats} data={filteredChats}
                 keyExtractor={(item) => item.partnerEmail}
                 renderItem={({ item }) => (
                     <TouchableOpacity style={styles.chatCard} onPress={() => handleChatPress(item)}>
                         <View style={styles.image}><Image style={styles.profimage} source={
-                                imageErrors[item.partnerEmail]
-                                    ? profileImg
-                                    : item.imageUri
-                                        ? { uri: item.imageUri }
-                                        : profileImg
-                            }
-                                onError={() =>
-                                    setImageErrors((prev) => ({
-                                        ...prev,
-                                        [item.partnerEmail]: true,
-                                    }))
-                                }></Image></View>
+                            imageErrors[item.partnerEmail]
+                                ? profileImg
+                                : item.imageUri
+                                    ? { uri: item.imageUri }
+                                    : profileImg
+                        }
+                            onError={() =>
+                                setImageErrors((prev) => ({
+                                    ...prev,
+                                    [item.partnerEmail]: true,
+                                }))
+                            }></Image></View>
                         <View style={styles.nameAndMssg}>
                             <View style={styles.name}><Text style={(!item.isRead && item.senderEmail !== email) ? styles.notRead : null}>{item.partnerEmail}</Text>
                             </View>
@@ -356,7 +365,7 @@ const styles = StyleSheet.create({
         height: 50,
         width: 50,
         marginLeft: "10%",
-        marginTop:10
+        marginTop: 10
     },
     nameAndMssg: {
         width: "60%",
@@ -374,11 +383,6 @@ const styles = StyleSheet.create({
     mssg: {
         maxWidth: "90%",
     },
-    search: {
-        height: 30,
-        justifyContent: "center",
-        width: "100%"
-    },
     read: {
 
     },
@@ -390,13 +394,32 @@ const styles = StyleSheet.create({
         width: "20%",
         marginLeft: "auto"
     },
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        color: "#000",
+        paddingVertical: 2,
+    },
+    search: {
+        height: 45,
+        justifyContent: "center",
+        width: "100%",
+        marginTop: 5,
+    },
+
     searchTouch: {
         justifyContent: "center",
+        alignItems: "center",
         flexDirection: "row",
         alignSelf: "center",
         borderColor: "#625252",
         width: "90%",
         borderWidth: 2,
         borderRadius: 10,
-    }
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        gap: 6,
+        backgroundColor: "#f5f1f1",
+        opacity: 0.8,
+    },
 });

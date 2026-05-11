@@ -7,143 +7,158 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { StompSubscription } from '@stomp/stompjs';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 
 
 interface GroupChatItem {
-  groupId: number;
-  groupName: string;
-  lastMessageContent: string | null;
-  lastMessageTime: string | null;
-  lastSenderEmail: string | null;
-  lastMessageRead: boolean;
+    groupId: number;
+    groupName: string;
+    lastMessageContent: string | null;
+    lastMessageTime: string | null;
+    lastSenderEmail: string | null;
+    lastMessageRead: boolean;
 }
 
 
 export default function GroupHome() {
-  const router = useRouter();
-  const { email, token } = useAuth();
-  const { stompClient, connected } = useChatSocket();
-const groupSubscriptionsRef = useRef<StompSubscription[]>([]);
-  const [groups, setGroups] = useState<GroupChatItem[]>([]);
+    const router = useRouter();
+    const { email, token } = useAuth();
+    const { stompClient, connected } = useChatSocket();
+    const groupSubscriptionsRef = useRef<StompSubscription[]>([]);
+    const [groups, setGroups] = useState<GroupChatItem[]>([]);
+    const [searchText, setSearchText] = useState("");
+    const filteredGroups = groups.filter((group) =>
+        group.groupName.toLowerCase().includes(searchText.toLowerCase())
+    );
 
-  useEffect(() => {
- if (!connected || !stompClient.current || groups.length === 0) return;
-    
+    useEffect(() => {
+        if (!connected || !stompClient.current || groups.length === 0) return;
 
- 
+        groupSubscriptionsRef.current.forEach((sub) => sub.unsubscribe());
+        groupSubscriptionsRef.current = [];
+        console.log("GROUP HOME SUB EFFECT", {
+            connected,
+            hasClient: !!stompClient.current,
+            groupsLength: groups.length,
+            ids: groups.map(g => g.groupId),
+        });
 
-  groupSubscriptionsRef.current.forEach((sub) => sub.unsubscribe());
-  groupSubscriptionsRef.current = [];
-  console.log("GROUP HOME SUB EFFECT", {
-  connected,
-  hasClient: !!stompClient.current,
-  groupsLength: groups.length,
-  ids: groups.map(g => g.groupId),
-});
+        groups.forEach((group) => {
+            const destination = `/topic/group/${group.groupId}`;
+            console.log("GROUP HOME SUBSCRIBING TO:", destination);
 
-  groups.forEach((group) => {
-    const destination = `/topic/group/${group.groupId}`;
-    console.log("GROUP HOME SUBSCRIBING TO:", destination);
+            const sub = stompClient.current!.subscribe(destination, async (message) => {
+                console.log("GROUP HOME RECEIVED:", message.body);
 
-    const sub = stompClient.current!.subscribe(destination, async (message) => {
-      console.log("GROUP HOME RECEIVED:", message.body);
+                await getGroups();
+            });
 
-      await getGroups();
-    });
+            groupSubscriptionsRef.current.push(sub);
+        });
 
-    groupSubscriptionsRef.current.push(sub);
-  });
-
-  return () => {
-    groupSubscriptionsRef.current.forEach((sub) => sub.unsubscribe());
-    groupSubscriptionsRef.current = [];
-  };
-}, [connected, groups.map((g) => g.groupId).join(",")]);
+        return () => {
+            groupSubscriptionsRef.current.forEach((sub) => sub.unsubscribe());
+            groupSubscriptionsRef.current = [];
+        };
+    }, [connected, groups.map((g) => g.groupId).join(",")]);
 
 
-  async function getGroups() {
-    if (!email || !token) return;
+    async function getGroups() {
+        if (!email || !token) return;
 
-    try {
-      const response = await fetchWithAuth(
-        `http://${IP_ADDRESS}:8080/messages/groupChats?email=${email}`,
-        {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            },
-            token
-      );
+        try {
+            const response = await fetchWithAuth(
+                `http://${IP_ADDRESS}:8080/messages/groupChats?email=${email}`,
+                {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                },
+                token
+            );
 
-      if (!response.ok) {
-        throw new Error('HTTP error: ' + response.status);
-      }
+            if (!response.ok) {
+                throw new Error('HTTP error: ' + response.status);
+            }
 
-      const data = await response.json();
-      setGroups(data);
-    } catch (error) {
-      console.log('Error loading groups:', error);
+            const data = await response.json();
+            setGroups(data);
+        } catch (error) {
+            console.log('Error loading groups:', error);
+        }
     }
-  }
 
-  useEffect(() => {
-    getGroups();
-  }, [email, token]);
+    useEffect(() => {
+        getGroups();
+    }, [email, token]);
 
-  function handleGroupPress(group: GroupChatItem) {
-    router.push({
-      pathname: '/groupchat',
-      params: {
-        groupId: group.groupId,
-        groupName: group.groupName,
-      },
-    });
-  }
+    function handleGroupPress(group: GroupChatItem) {
+        router.push({
+            pathname: '/groupchat',
+            params: {
+                groupId: group.groupId,
+                groupName: group.groupName,
+            },
+        });
+    }
 
-  return (
-    <View style={styles.page}>
-      <Background />
+    return (
+        <View style={styles.page}>
+            <Background />
 
-      <View style={styles.search}>
-        <TouchableOpacity style={styles.searchTouch}>
-          <Ionicons name="search" size={30} color="#000" />
-          <Text>Search groups</Text>
-        </TouchableOpacity>
-      </View>
+            <View style={styles.search}>
+                <View style={styles.searchTouch}>
+                    <Ionicons name="search" size={28} color="#000" />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholderTextColor="#625252"
+                        placeholder="Search groups"
+                        value={searchText}
+                        onChangeText={setSearchText}
+                        autoCapitalize="none"
+                    />
 
-      <FlatList
-        style={styles.chats}
-        data={groups}
-        keyExtractor={(item) => item.groupId.toString()}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.chatCard}
-            onPress={() => handleGroupPress(item)}
-          >
-            <View style={styles.groupIcon}>
-              <MaterialCommunityIcons name="account-group" size={34} color="#5a3e36" />
+                    {searchText.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchText("")}>
+                            <Ionicons name="close-circle" size={22} color="#625252" />
+                        </TouchableOpacity>
+                    )}
+                </View>
+
             </View>
 
-            <View style={styles.nameAndMssg}>
-              <Text style={(!item.lastMessageRead && item.lastSenderEmail !== email) ? styles.notRead : styles.groupName}>{item.groupName}</Text>
+            <FlatList
+                style={styles.chats}
+                data={filteredGroups}
+                keyExtractor={(item) => item.groupId.toString()}
+                renderItem={({ item }) => (
+                    <TouchableOpacity
+                        style={styles.chatCard}
+                        onPress={() => handleGroupPress(item)}
+                    >
+                        <View style={styles.groupIcon}>
+                            <MaterialCommunityIcons name="account-group" size={34} color="#5a3e36" />
+                        </View>
 
-              <Text numberOfLines={1} ellipsizeMode="tail" style={styles.message}>
-                {item.lastSenderEmail
-                  ? 'Click to see more'
-                  : 'No messages yet'}
-              </Text>
-            </View>
+                        <View style={styles.nameAndMssg}>
+                            <Text style={(!item.lastMessageRead && item.lastSenderEmail !== email) ? styles.notRead : styles.groupName}>{item.groupName}</Text>
 
-            <View style={styles.timeBox}>
-              <Text style={styles.timeText}>
-                {item.lastMessageTime
-                  ? item.lastMessageTime.slice(5, 16).replace('T', ' ')
-                  : ''}</Text>
+                            <Text numberOfLines={1} ellipsizeMode="tail" style={styles.message}>
+                                {item.lastSenderEmail
+                                    ? 'Click to see more'
+                                    : 'No messages yet'}
+                            </Text>
+                        </View>
 
-                   {(!item.lastMessageRead && item.lastSenderEmail !== email) ? (<View>
+                        <View style={styles.timeBox}>
+                            <Text style={styles.timeText}>
+                                {item.lastMessageTime
+                                    ? item.lastMessageTime.slice(5, 16).replace('T', ' ')
+                                    : ''}</Text>
+
+                            {(!item.lastMessageRead && item.lastSenderEmail !== email) ? (<View>
                                 <MaterialCommunityIcons
                                     name="circle"
                                     size={16}
@@ -152,88 +167,101 @@ const groupSubscriptionsRef = useRef<StompSubscription[]>([]);
                                 />
                             </View>
                             ) : null}
-              
-            </View>
-          </TouchableOpacity>
-        )}
-      />
-    </View>
-  );
+
+                        </View>
+                    </TouchableOpacity>
+                )}
+            />
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    flexDirection: 'column',
-    justifyContent: 'flex-start',
-    height: '100%',
-  },
-  search: {
-    height: 30,
-    justifyContent: 'center',
-    width: '100%',
-  },
-  searchTouch: {
-    justifyContent: 'center',
-    flexDirection: 'row',
-    alignSelf: 'center',
-    borderColor: '#625252',
-    width: '90%',
-    borderWidth: 2,
-    borderRadius: 10,
-  },
-  chats: {
-    flexDirection: 'column',
-    height: '90%',
-  },
-  chatCard: {
-    flexDirection: 'row',
-    backgroundColor: '#f5f1f1',
-    margin: 4,
-    borderRadius: 10,
-    shadowColor: 'black',
-    shadowRadius: 10,
-    shadowOffset: { width: 4, height: 2 },
-    shadowOpacity: 0.5,
-    opacity: 0.8,
-    paddingVertical: 8,
-  },
-  groupIcon: {
-    height: 55,
-    width: 55,
-    borderRadius: 30,
-    backgroundColor: '#dfc490',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
-  },
-  nameAndMssg: {
-    width: '65%',
-    marginLeft: 12,
-    justifyContent: 'center',
-  },
-  notRead:{
-fontWeight: 'bold',
-    color: '#090808',
-  },
-  groupName: {
-    fontWeight: 'bold',
-    color: '#453e3e',
-  },
-  message: {
-    color: '#453e3e',
-    marginTop: 4,
-  },
-  timeBox: {
+    page: {
+        flex: 1,
+        flexDirection: 'column',
+        justifyContent: 'flex-start',
+        height: '100%',
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        color: "#000",
+        paddingVertical: 2,
+    },
+    search: {
+        height: 45,
+        justifyContent: "center",
+        width: "100%",
+        marginTop: 5,
+    },
+
+    searchTouch: {
+        justifyContent: "center",
+        alignItems: "center",
+        flexDirection: "row",
+        alignSelf: "center",
+        borderColor: "#625252",
+        width: "90%",
+        borderWidth: 2,
+        borderRadius: 10,
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        gap: 6,
+        backgroundColor: "#f5f1f1",
+    },
+    chats: {
+        flexDirection: 'column',
+        height: '90%',
+    },
+    chatCard: {
+        flexDirection: 'row',
+        backgroundColor: '#f5f1f1',
+        margin: 4,
+        borderRadius: 10,
+        shadowColor: 'black',
+        shadowRadius: 10,
+        shadowOffset: { width: 4, height: 2 },
+        shadowOpacity: 0.5,
+        opacity: 0.8,
+        paddingVertical: 8,
+    },
+    groupIcon: {
+        height: 55,
+        width: 55,
+        borderRadius: 30,
+        backgroundColor: '#dfc490',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 10,
+    },
+    nameAndMssg: {
+        width: '65%',
+        marginLeft: 12,
+        justifyContent: 'center',
+    },
+    notRead: {
+        fontWeight: 'bold',
+        color: '#090808',
+    },
+    groupName: {
+        fontWeight: 'bold',
+        color: '#453e3e',
+    },
+    message: {
+        color: '#453e3e',
+        marginTop: 4,
+    },
+    timeBox: {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         paddingRight: 50,
-        marginRight:50,
+        marginRight: 50,
         minWidth: 10,
-  },
-  timeText: {
-    fontSize: 11,
-    color: 'gray',
-  },
+    },
+    timeText: {
+        fontSize: 11,
+        color: 'gray',
+    },
 });
