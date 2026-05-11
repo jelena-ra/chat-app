@@ -7,7 +7,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { StompSubscription } from "@stomp/stompjs";
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, AppState, AppStateStatus, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, AppStateStatus, FlatList, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
 
 import 'react-native-get-random-values';
@@ -25,11 +26,12 @@ Object.assign(globalThis, {
 
 
 export default function Chat() {
-
+const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const receiverEmail = Array.isArray(params.receivermail) ? params.receivermail[0] : params.receivermail;
   const sharedKeyRef = useRef<Uint8Array | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [content, setContent] = useState("");
   const [disappearing, setDisappearing] = useState(false);
@@ -44,6 +46,23 @@ export default function Chat() {
   const { email, token, privateSigningKey, privateEncryptingKey } = useAuth();
   const { stompClient, connected } = useChatSocket();
 
+
+  useEffect(() => {
+  if (Platform.OS !== "android") return;
+
+  const show = Keyboard.addListener("keyboardDidShow", (e) => {
+    setKeyboardHeight(e.endCoordinates.height- insets.bottom );
+  });
+
+  const hide = Keyboard.addListener("keyboardDidHide", () => {
+    setKeyboardHeight(0);
+  });
+
+  return () => {
+    show.remove();
+    hide.remove();
+  };
+}, []);
 
   useEffect(() => {
     console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 0. U prvom sam useeffectu...`);
@@ -251,7 +270,11 @@ export default function Chat() {
         const filteredkeys = messages.map((msg: any) => {
           const chatKey = msg.senderEmail === email ? msg.receiverEmail : msg.senderEmail;
           try {
+            if(msg.disappearing){
+              msg.content = "disappearing..."
+            }else{
             msg.content = decrypt(sharedKey, msg.content);
+            }
           } catch (error) {
             console.log("error with decryption: " + error);
           }
@@ -385,25 +408,18 @@ export default function Chat() {
      return nacl.sign.detached.verify(messageBytes, signature2, publicKey);
    }*/
   return (
-    <KeyboardAvoidingView
-
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      style={{ flex: 1, backgroundColor: '#EFEAE2' }}
-    >
+    <View style={{flex:1}}>
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="#128C7E" />
         </View>
-      ) : (
-
-
+      ) : (<View style={{ flex: Platform.OS === 'ios' ? 1:0.9 }}>
         <FlatList
           inverted={true}
           data={[...messages].reverse()}
           keyboardShouldPersistTaps="handled"
           keyExtractor={(_, index) => index.toString()}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          contentContainerStyle={{ paddingBottom: 80 }}
           renderItem={({ item }) => {
             const isMe = item.senderEmail === email;
 
@@ -444,8 +460,13 @@ export default function Chat() {
               </View>
             );
           }}
-        />
+        /></View>
       )}
+  {Platform.OS === 'ios' ? (
+  <KeyboardAvoidingView
+    behavior={'padding'}
+     keyboardVerticalOffset={90}
+  >
       <View style={styles.inputContainer}>
 
         <View style={styles.textInputWrapper}>
@@ -469,6 +490,7 @@ export default function Chat() {
             />
           </TouchableOpacity>
         </View>
+       
 
 
         <TouchableOpacity
@@ -479,8 +501,45 @@ export default function Chat() {
           <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
         </TouchableOpacity>
       </View>
+       </KeyboardAvoidingView>
+  ):(
+    <View  style={[
+    styles.inputContainerAndroid,
+    { bottom: keyboardHeight }
+  ]}>
 
-    </KeyboardAvoidingView>
+        <View style={styles.textInputWrapper}>
+          <TextInput
+            style={styles.textInput}
+            value={content}
+            onChangeText={setContent}
+            placeholder="Message"
+            placeholderTextColor="#888"
+            multiline={true}
+          />
+
+          <TouchableOpacity
+            onPress={() => setDisappearing(!disappearing)}
+            style={styles.iconButton}
+          >
+            <MaterialCommunityIcons
+              name={disappearing ? "timer" : "timer-off-outline"}
+              size={24}
+              color={disappearing ? "#128C7E" : "#888"}
+            />
+          </TouchableOpacity>
+        </View>      
+        <TouchableOpacity
+          style={[styles.sendButton, { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }]}
+          onPress={sendMessage}
+          disabled={!connected || !content.trim()}
+        >
+          <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
+        </TouchableOpacity>
+      </View>
+  )}
+    
+</View>
   );
 };
 const styles = StyleSheet.create({
@@ -491,6 +550,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
     backgroundColor: 'transparent',
+    paddingBottom: Platform.OS === "android" ? 20 : 8,
   },
   textInputWrapper: {
     flex: 1,
@@ -512,6 +572,17 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: 8,
   },
+  inputContainerAndroid: {
+  position: "absolute",
+  bottom: 0,
+  left: 0,
+  right: 0,
+  flexDirection: "row",
+  alignItems: "flex-end",
+  paddingHorizontal: 8,
+  paddingVertical: 8,
+  backgroundColor: "#EFEAE2",
+},
   sendButton: {
     width: 48,
     height: 48,

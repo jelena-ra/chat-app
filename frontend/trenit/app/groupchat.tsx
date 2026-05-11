@@ -9,11 +9,11 @@ import {
 import { useAuth } from '@/components/AuthContext';
 import { useChatSocket } from '@/components/ChatSocketContext';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-
 import { StompSubscription } from '@stomp/stompjs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useRef, useState } from 'react';
@@ -37,7 +37,7 @@ export default function GroupChat() {
 
   const { email, token, privateSigningKey, privateEncryptingKey  } = useAuth();
   const { stompClient, connected } = useChatSocket();
-
+const insets = useSafeAreaInsets();
   const [addMemberVisible, setAddMemberVisible] = useState(false);
 const [newMemberEmail, setNewMemberEmail] = useState('');
 
@@ -47,7 +47,25 @@ const [newMemberEmail, setNewMemberEmail] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   const subscriptionRef = useRef<StompSubscription | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
+  
+    useEffect(() => {
+    if (Platform.OS !== "android") return;
+  
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardHeight(e.endCoordinates.height- insets.bottom );
+    });
+  
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+    });
+  
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   useEffect(() => {
   if (!stompClient.current || !connected || !email || !groupId) return;
@@ -265,11 +283,7 @@ async function handleAddMember() {
   return (
 
     
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      style={{ flex: 1, backgroundColor: '#EFEAE2' }}
-    >
+    <View style={{flex:1}}>
         <Stack.Screen
   options={{
     headerRight: () => (
@@ -285,7 +299,7 @@ async function handleAddMember() {
         </View>
       ) : (
 
-        
+        <View style={{ flex: Platform.OS === 'ios' ? 1:0.9 }}>
         <FlatList
           inverted
           data={[...messages].reverse()}
@@ -320,7 +334,7 @@ async function handleAddMember() {
               </View>
             );
           }}
-        />
+        /></View>
       )}
 <Modal
   visible={addMemberVisible}
@@ -359,6 +373,8 @@ async function handleAddMember() {
     </View>
   </View>
 </Modal>
+{Platform.OS === 'ios' ? (<KeyboardAvoidingView  behavior={'padding'}
+     keyboardVerticalOffset={90}>
       <View style={styles.inputContainer}>
         <View style={styles.textInputWrapper}>
           <TextInput
@@ -381,8 +397,35 @@ async function handleAddMember() {
         >
           <MaterialCommunityIcons name="send" size={24} color="white" />
         </TouchableOpacity>
+      </View></KeyboardAvoidingView>):(
+         <View style={[
+    styles.inputContainerAndroid,
+    { bottom: keyboardHeight }
+  ]}>
+        <View style={styles.textInputWrapper}>
+          <TextInput
+            style={styles.textInput}
+            value={content}
+            onChangeText={setContent}
+            placeholder="Group message"
+            placeholderTextColor="#888"
+            multiline
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.sendButton,
+            { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }
+          ]}
+          onPress={sendMessage}
+          disabled={!connected || !content.trim()}
+        >
+          <MaterialCommunityIcons name="send" size={24} color="white" />
+        </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+      )}
+    </View>
   );
 }
 
@@ -394,6 +437,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
+    paddingBottom: Platform.OS === "android" ? 20 : 8,
     alignItems: 'flex-end',
     paddingHorizontal: 8,
     paddingVertical: 8,
@@ -416,6 +460,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingTop: 10,
   },
+    inputContainerAndroid: {
+  position: "absolute",
+  bottom: 0,
+  left: 0,
+  right: 0,
+  flexDirection: "row",
+  alignItems: "flex-end",
+  paddingHorizontal: 8,
+  paddingVertical: 8,
+  backgroundColor: "#EFEAE2",
+},
   sendButton: {
     width: 48,
     height: 48,

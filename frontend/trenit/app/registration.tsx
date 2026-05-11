@@ -4,7 +4,7 @@ import Background from '@/components/GlobalBackground';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View, } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 
 const imgSource = require('@/assets/images/C.png');
@@ -87,12 +87,17 @@ router.push({
 
 return(
     <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0} 
-       style={{ flex: 1, backgroundColor: '#EFEAE2' }} 
+       style={{ flex: 1}} 
     >
+         <Background/>
+        <ScrollView
+    contentContainerStyle={{ flexGrow: 0, paddingBottom: 80 }}
+    keyboardShouldPersistTaps="handled"
+  >
     <View style={styles.page}>
-        <Background/>
+       
         <Image source={imgSource} style={styles.img} ></Image>
         <Text style={styles.txtSign}>Connect with your friends</Text>
         <Text style={styles.txt}>Create your account </Text>
@@ -119,6 +124,7 @@ return(
             </View>
         </View>
     </View>
+    </ScrollView>
     </KeyboardAvoidingView>
    
 );
@@ -153,7 +159,7 @@ const styles = StyleSheet.create({
         shadowRadius:10,
         elevation:15,
         width:"100%",
-        flex:0.7   
+        flex:0.8   
         },
     background: {
         position: 'absolute',

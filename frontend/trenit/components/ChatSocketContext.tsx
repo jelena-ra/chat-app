@@ -42,9 +42,9 @@ export const ChatSocketProvider = ({ children }: { children: ReactNode }) => {
     return newAccessToken;
   }
 
-  async function getValidToken(): Promise<string> {
+  async function getValidToken(): Promise<string|null> {
     const storedToken = await SecureStore.getItemAsync('accessToken');
-    if (!storedToken) throw new Error('No access token found');
+    if (!storedToken) return null;
 
     const payload = JSON.parse(atob(storedToken.split('.')[1]));
     const now = Math.floor(Date.now() / 1000);
@@ -65,7 +65,10 @@ export const ChatSocketProvider = ({ children }: { children: ReactNode }) => {
 
       try {
         const validToken = await getValidToken();
-
+        if (!validToken) {
+          console.log("Socket skipped: no access token yet");
+          return;
+      }
         const client = new Client({
           brokerURL: `ws://${IP_ADDRESS}:8080/socket`,
           connectHeaders: {

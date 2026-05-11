@@ -2,14 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, usePathname, useRouter } from "expo-router";
 import { useState } from "react";
 import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Sidebar from "./sidebar";
-
 
 export default function RootLayoutInner() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
       const router = useRouter();
       const pathname = usePathname();
-
+const insets = useSafeAreaInsets();
       const showFloatingPlus =
   pathname === "/home" || pathname === "/grouphome";
 
@@ -65,7 +65,10 @@ export default function RootLayoutInner() {
     <Ionicons name="add" size={32} color="white" />
   </TouchableOpacity>
 ): null}
-      {!hideBottomBar ? <View style={styles.plus}>
+      {!hideBottomBar ? <View style={[styles.plus, {
+      paddingBottom: insets.bottom,
+      height: 40 + insets.bottom,
+    }]}>
                       <TouchableOpacity onPress={() => {console.log("CLICKED");router.push("/newGroup")}}><Ionicons name="call-outline" size={30} color={"#9d6d6d"}   /></TouchableOpacity>
                       <TouchableOpacity onPress={() => router.push("/grouphome")}  ><Ionicons name="people" size={30} color={"#9d6d6d"} /></TouchableOpacity>
                       <TouchableOpacity onPress={() => router.push("/home")} ><Ionicons name="chatbubble-outline" size={30} color={"#9d6d6d"} /></TouchableOpacity>
