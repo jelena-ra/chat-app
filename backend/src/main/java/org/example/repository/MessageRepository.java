@@ -15,7 +15,7 @@ import java.util.Optional;
 @Repository
 public interface MessageRepository extends JpaRepository<Message, Long> {
     List<Message> findAllBySender_IdAndReceiver_IdOrSender_IdAndReceiver_Id(Long senderId,Long receiverId, Long senderId2, Long receiverId2);
-
+    Optional<Message> findByClientId(String clientId);
     List<Message> findAllBySender_IdOrReceiver_IdOrderByTimeSentDesc(Long id, Long id2);
 
     /*@Query(value = """
@@ -41,7 +41,8 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
         m.time_sent AS timeSent,
         s.email AS senderEmail,
         r.email AS receiverEmail,
-        m.is_read AS read
+        m.is_read AS read,
+        m.disappearing_status AS disappearingStatus
     FROM message m
     JOIN users s ON s.id = m.sender_id
     JOIN users r ON r.id = m.receiver_id

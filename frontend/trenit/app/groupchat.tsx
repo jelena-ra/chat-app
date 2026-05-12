@@ -28,7 +28,7 @@ interface GroupMessageDTO {
   timeSent: string;
   senderEmail: string;
   groupId: number;
-  disappearing: boolean;
+  disappearingStatus: string;
 }
 
 export default function GroupChat() {
@@ -262,7 +262,7 @@ async function handleAddMember() {
       timeSent: new Date().toISOString(),
       senderEmail: email,
       groupId,
-      disappearing: false
+      disappearingStatus:"NOT_DISAPPEARING"
     };
 
     try {

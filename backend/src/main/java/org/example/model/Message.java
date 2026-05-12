@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.example.model.enums.DisappearingStatus;
 
 import java.time.LocalDateTime;
 
@@ -23,7 +24,9 @@ public class Message {
 
     private String content;
     private String signature;
-    private boolean isDisappearing;
+
+    @Enumerated(EnumType.STRING)
+    private DisappearingStatus disappearingStatus;
     private boolean isReceived;
     private boolean isDeletedBySender;
     private boolean isRead;

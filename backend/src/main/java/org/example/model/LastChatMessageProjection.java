@@ -1,5 +1,7 @@
 package org.example.model;
 
+import org.example.model.enums.DisappearingStatus;
+
 import java.time.LocalDateTime;
 
 public interface LastChatMessageProjection {
@@ -10,4 +12,5 @@ public interface LastChatMessageProjection {
     String getReceiverEmail();
     boolean getRead();
     Long getGroupId();
+    DisappearingStatus getDisappearingStatus();
 }

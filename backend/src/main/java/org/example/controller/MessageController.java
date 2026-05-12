@@ -2,6 +2,7 @@ package org.example.controller;
 
 import org.example.dtos.GroupChatDTO;
 import org.example.dtos.MessageDTO;
+import org.example.dtos.OpenMessageDTO;
 import org.example.dtos.ReadUpdateDTO;
 import org.example.model.Group;
 import org.example.model.Message;
@@ -150,5 +151,19 @@ public class MessageController {
     public ResponseEntity<List<MessageDTO>> getGroupMessages(@RequestParam Long groupId) {
         List<MessageDTO> messages = _messageService.getGroupMessages(groupId);
         return ResponseEntity.ok(messages);
+    }
+
+    @MessageMapping("/open-message")
+    public void openMessage(OpenMessageDTO openMessageDTO) {
+        Message msg = _messageService.openDisappearing(openMessageDTO.getClientId());
+        if(msg!=null && !msg.getSender().getEmail().equals(openMessageDTO.getUserEmail())) {
+            List<String> id = new ArrayList<>();
+            id.add(msg.getClientId());
+            messagingTemplate.convertAndSendToUser(
+                    msg.getReceiver().getEmail(),
+                    "/queue/message-opened",
+                    new ReadUpdateDTO("messages-opened", id)
+            );
+        }
     }
 }

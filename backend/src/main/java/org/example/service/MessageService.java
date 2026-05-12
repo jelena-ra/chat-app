@@ -7,6 +7,7 @@ import org.example.model.Group;
 import org.example.model.GroupMessageStatus;
 import org.example.model.Message;
 import org.example.model.User;
+import org.example.model.enums.DisappearingStatus;
 import org.example.repository.MessageRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -46,7 +47,7 @@ public class MessageService {
         if(message.getGroupId()!=null){
          group = groupService.getById(message.getGroupId());
             }
-        Message mess = new Message(null,message.getClientId(),message.getContent(), message.getSignature() , message.isDisappearing(),false, false, message.isRead(), LocalDateTime.now(),sender, receiver, group);
+        Message mess = new Message(null,message.getClientId(),message.getContent(), message.getSignature() , message.getDisappearingStatus(),false, false, message.isRead(), LocalDateTime.now(),sender, receiver, group);
         return _messageRepository.save(mess);
     }
 
@@ -61,7 +62,15 @@ public class MessageService {
 
         return dtos;
     }
-
+public Message openDisappearing(String clientId){
+        Message mssg = _messageRepository.findByClientId(clientId).orElse(null);
+        if(mssg!=null){
+            mssg.setDisappearingStatus(DisappearingStatus.READ);
+            mssg.setContent(null);
+            _messageRepository.save(mssg);
+        }
+        return mssg;
+}
     public List<GroupChatDTO> getGroupChatPreviews(String email) {
 
         List<Group> groups = groupService.getMyGroups(email);
@@ -137,7 +146,7 @@ public class MessageService {
                         p.getClientId(),
                         p.getContent(),
                         null,
-                        false,
+                        p.getDisappearingStatus(),
                         p.getTimeSent(),
                         p.getSenderEmail(),
                         p.getReceiverEmail(),

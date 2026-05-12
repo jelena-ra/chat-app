@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.example.model.Message;
 import org.example.model.User;
+import org.example.model.enums.DisappearingStatus;
 
 import java.time.LocalDateTime;
 
@@ -20,7 +21,7 @@ public class MessageDTO {
     private String clientId;
     private String content;
     private String signature;
-    private boolean isDisappearing;
+    private DisappearingStatus disappearingStatus;
     private LocalDateTime timeSent;
 
    /* @ManyToOne
@@ -35,7 +36,7 @@ public class MessageDTO {
     public MessageDTO(Message message){
         this.clientId= message.getClientId();
         this.content= message.getContent();
-        this.isDisappearing = message.isDisappearing();
+        this.disappearingStatus = message.getDisappearingStatus();
         this.timeSent=message.getTimeSent();
         this.senderEmail=message.getSender().getEmail();
         this.receiverEmail = message.getReceiver() != null

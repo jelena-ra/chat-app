@@ -22,7 +22,7 @@ const profileImg = require('@/assets/images/profile.png');
 interface MessageDTO {
     content: string;
     signature: string;
-    isDisappearing: boolean;
+    disappearingStatus: string;
     timeSent: string;
     read: boolean;
     senderEmail?: string;
@@ -155,14 +155,18 @@ export default function Home() {
                     if (lastMessageDTO.senderEmail != null) {
                         senderEmail = lastMessageDTO.senderEmail;
                     }
-
-                    if (partnerKeys?.publicEncryptingkey && privateEncryptingKey) {
+                    console.log("status:" + lastMessageDTO.disappearingStatus);
+                    console.log(lastMessageDTO);
+                    if (partnerKeys?.publicEncryptingkey && privateEncryptingKey && lastMessageDTO.disappearingStatus==="NOT_DISAPPEARING") {
                         const sharedKey = box.before(
                             decodeBase64(partnerKeys.publicEncryptingkey),
                             decodeBase64(privateEncryptingKey)
                         );
                         content = decrypt(sharedKey, lastMessageDTO.content) ?? "";
                         console.log("CONTENT TYPE:", typeof content, content);
+                    }
+                    if(lastMessageDTO.disappearingStatus!=="NOT_DISAPPEARING"){
+                        content="disappearing message..."
                     }
                     console.log("Is read? " + lastMessageDTO.read);
                     return {

@@ -26,7 +26,7 @@ Object.assign(globalThis, {
 
 
 export default function Chat() {
-const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const receiverEmail = Array.isArray(params.receivermail) ? params.receivermail[0] : params.receivermail;
@@ -43,52 +43,56 @@ const insets = useSafeAreaInsets();
   const subscriptionRef = useRef<StompSubscription | null>(null);
   const readsubscriptionRef = useRef<StompSubscription | null>(null);
 
+  const openedsubscriptionRef = useRef<StompSubscription | null>(null);
+
   const { email, token, privateSigningKey, privateEncryptingKey } = useAuth();
   const { stompClient, connected } = useChatSocket();
 
+  const [revealedMessages, setRevealedMessages] = useState<Record<string, boolean>>({});
+
 
   useEffect(() => {
-  if (Platform.OS !== "android") return;
+    if (Platform.OS !== "android") return;
 
-  const show = Keyboard.addListener("keyboardDidShow", (e) => {
-    setKeyboardHeight(e.endCoordinates.height- insets.bottom );
-  });
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardHeight(e.endCoordinates.height - insets.bottom);
+    });
 
-  const hide = Keyboard.addListener("keyboardDidHide", () => {
-    setKeyboardHeight(0);
-  });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+    });
 
-  return () => {
-    show.remove();
-    hide.remove();
-  };
-}, []);
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   useEffect(() => {
     console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 0. U prvom sam useeffectu...`);
     let currentReceiverCryptoKey = publicEncryptingKeyReceiver;
 
-    
-  async function getPublicKeys(useremail: string) {
-    if (!token) {
-      console.log("access token not found")
-      return;
-    }
-    try {
 
-
-      const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/users/getPublicKeys?userEmail=${useremail}`, token)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+    async function getPublicKeys(useremail: string) {
+      if (!token) {
+        console.log("access token not found")
+        return;
       }
-      const data = await response.json();
-      return data;
+      try {
 
 
-    } catch (error) {
-      console.error("Error fetching previous messages:", error);
+        const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/users/getPublicKeys?userEmail=${useremail}`, token)
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        return data;
+
+
+      } catch (error) {
+        console.error("Error fetching previous messages:", error);
+      }
     }
-  }
 
 
     async function receiverKeys() {
@@ -144,6 +148,10 @@ const insets = useSafeAreaInsets();
         readsubscriptionRef.current.unsubscribe();
       }
 
+       if (openedsubscriptionRef.current) {
+        openedsubscriptionRef.current.unsubscribe();
+      }
+
 
       subscriptionRef.current = stompClient.current.subscribe(`/user/${email}/queue/messages`, (message) => {
 
@@ -151,7 +159,7 @@ const insets = useSafeAreaInsets();
         const receivedMessage = JSON.parse(message.body);
         const chatKey = receivedMessage.senderEmail === email ? receivedMessage.receiverEmail : receivedMessage.senderEmail;
 
-        if (sharedKeyRef.current && !receivedMessage.disappearing) {
+        if (sharedKeyRef.current && receivedMessage.disappearingStatus !== "READ") {
           try {
             const decrypted = decrypt(sharedKeyRef.current, receivedMessage.content);
             receivedMessage.content = decrypted;
@@ -160,8 +168,8 @@ const insets = useSafeAreaInsets();
           }
 
         }
-        if(receivedMessage.disappearing){
-          receivedMessage.content ="disappearing..."
+        if (receivedMessage.disappearingStatus === "READ") {
+          receivedMessage.content = "disappearing..."
         }
         console.log("Subscribed:", subscriptionRef.current);
         setChatMessages((prev) => {
@@ -198,8 +206,40 @@ const insets = useSafeAreaInsets();
 
 
             );
+          }
 
-            console.log("Eco sad sve: ", updatedChats[chatKey]);
+          return {
+            ...prev,
+            ...updatedChats,
+          };
+        });
+
+      });
+
+
+       openedsubscriptionRef.current = stompClient.current.subscribe(`/user/${email}/queue/message-opened`, (message) => {
+
+
+        const messageUpdate = JSON.parse(message.body);
+
+
+        const updatedMessageIds: number[] = messageUpdate.messageId || [];
+
+        if (updatedMessageIds.length === 0) return;
+
+        setChatMessages((prev) => {
+          const updatedChats: Record<string, any[]> = {};
+
+          for (const chatKey in prev) {
+            const currentMessages = Array.isArray(prev[chatKey]) ? prev[chatKey] : [];
+
+            updatedChats[chatKey] = currentMessages.map((msg: any) =>
+              updatedMessageIds.includes(msg.clientId)
+                ? { ...msg, disappearingStatus: "READ" }
+                : msg
+
+
+            );
           }
 
           return {
@@ -270,10 +310,10 @@ const insets = useSafeAreaInsets();
         const filteredkeys = messages.map((msg: any) => {
           const chatKey = msg.senderEmail === email ? msg.receiverEmail : msg.senderEmail;
           try {
-            if(msg.disappearing){
-              msg.content = "disappearing..."
-            }else{
-            msg.content = decrypt(sharedKey, msg.content);
+            if (msg.disappearingStatus === "READ") {
+              msg.content = "";
+            } else {
+              msg.content = decrypt(sharedKey, msg.content);
             }
           } catch (error) {
             console.log("error with decryption: " + error);
@@ -323,6 +363,7 @@ const insets = useSafeAreaInsets();
       const finalcontent = encrypt(sharedKey, rawContent);
       const signature = sign(finalcontent, decodeBase64(privateSigningKey));
       const clientId = uuidv4();
+      const disappearingstatus = disappearing ? "DISAPPEARING" : "NOT_DISAPPEARING";
       const message = {
         clientId: clientId,
         content: finalcontent,
@@ -330,7 +371,7 @@ const insets = useSafeAreaInsets();
         timeSent: new Date().toISOString(),
         senderEmail: email,
         receiverEmail: receiverEmail,
-        disappearing: disappearing,
+        disappearingStatus: disappearingstatus,
         read: false
       }
 
@@ -357,6 +398,26 @@ const insets = useSafeAreaInsets();
 
   const newNonce = () => randomBytes(box.nonceLength);
 
+  function revealMessage(item: any) {
+    setRevealedMessages((prev) => ({
+      ...prev,
+      [item.clientId]: true,
+    }));
+
+    stompClient.current?.publish({
+      destination:'/socket-subscriber/open-message',
+      body:JSON.stringify({
+          clientId: item.clientId,
+          userEmail: email
+        })
+    })
+    setTimeout(() => {
+      setRevealedMessages((prev) => ({
+        ...prev,
+        [item.clientId]: false,
+      }));
+    }, 10000); 
+  }
 
   function encrypt(shared: Uint8Array, json: any) {
 
@@ -408,12 +469,12 @@ const insets = useSafeAreaInsets();
      return nacl.sign.detached.verify(messageBytes, signature2, publicKey);
    }*/
   return (
-    <View style={{flex:1}}>
+    <View style={{ flex: 1 }}>
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="#128C7E" />
         </View>
-      ) : (<View style={{ flex: Platform.OS === 'ios' ? 1:0.9 }}>
+      ) : (<View style={{ flex: Platform.OS === 'ios' ? 1 : 0.9 }}>
         <FlatList
           inverted={true}
           data={[...messages].reverse()}
@@ -437,17 +498,37 @@ const insets = useSafeAreaInsets();
                 </Text>
 
                 {/*#DCF8C6 */}
-                <View
+                <TouchableOpacity
+                  disabled={item.disappearingStatus !== "DISAPPEARING" || item.senderEmail===email}
+                  onPress={() => revealMessage(item)}
                   style={{
                     backgroundColor: isMe ? "#dfc490" : "#ececec",
                     padding: 10,
                     borderRadius: 10,
                   }}
                 >
-                  <Text>
-                    {sharedKey
-                      ? item.content
-                      : "Dekriptovanje..."}
+                  <Text style={{
+                    opacity: item.disappearingStatus === "NOT_DISAPPEARING" && !revealedMessages[item.clientId] ? 1 : 0.4,
+                    fontStyle: item.disappearingStatus === "DISAPPEARING" ? "italic" : "normal",
+                  }}>
+                     {item.disappearingStatus === "READ"
+    ? <Text>Disappearing <MaterialCommunityIcons name="clock-fast"/></Text>
+
+    : item.disappearingStatus === "DISAPPEARING" &&
+      item.senderEmail !== email
+
+      ? revealedMessages[item.clientId]
+        ? item.content
+        : "Tap to reveal 👀"
+
+      : item.disappearingStatus === "DISAPPEARING" &&
+        item.senderEmail === email
+
+        ? <Text>Disappearing <MaterialCommunityIcons name="clock-fast"/></Text>
+
+        : sharedKey
+          ? item.content
+          : "Decrypting..."}
                   </Text>
                   <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                     <Text style={{ fontSize: 10, color: "gray", marginTop: 5 }}>
@@ -456,90 +537,90 @@ const insets = useSafeAreaInsets();
                     {(isMe && !item.read) ? <MaterialIcons name="check" size={13} /> : null}
                     {(isMe && item.read) ? <MaterialCommunityIcons name="check-all" size={13} color="#29889d" /> : null}
                   </View>
-                </View>
+                </TouchableOpacity>
               </View>
             );
           }}
         /></View>
       )}
-  {Platform.OS === 'ios' ? (
-  <KeyboardAvoidingView
-    behavior={'padding'}
-     keyboardVerticalOffset={90}
-  >
-      <View style={styles.inputContainer}>
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView
+          behavior={'padding'}
+          keyboardVerticalOffset={90}
+        >
+          <View style={styles.inputContainer}>
 
-        <View style={styles.textInputWrapper}>
-          <TextInput
-            style={styles.textInput}
-            value={content}
-            onChangeText={setContent}
-            placeholder="Message"
-            placeholderTextColor="#888"
-            multiline={true}
-          />
+            <View style={styles.textInputWrapper}>
+              <TextInput
+                style={styles.textInput}
+                value={content}
+                onChangeText={setContent}
+                placeholder="Message"
+                placeholderTextColor="#888"
+                multiline={true}
+              />
 
-          <TouchableOpacity
-            onPress={() => setDisappearing(!disappearing)}
-            style={styles.iconButton}
-          >
-            <MaterialCommunityIcons
-              name={disappearing ? "timer" : "timer-off-outline"}
-              size={24}
-              color={disappearing ? "#128C7E" : "#888"}
+              <TouchableOpacity
+                onPress={() => setDisappearing(!disappearing)}
+                style={styles.iconButton}
+              >
+                <MaterialCommunityIcons
+                  name={disappearing ? "timer" : "timer-off-outline"}
+                  size={24}
+                  color={disappearing ? "#128C7E" : "#888"}
+                />
+              </TouchableOpacity>
+            </View>
+
+
+
+            <TouchableOpacity
+              style={[styles.sendButton, { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }]}
+              onPress={sendMessage}
+              disabled={!connected || !content.trim()}
+            >
+              <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      ) : (
+        <View style={[
+          styles.inputContainerAndroid,
+          { bottom: keyboardHeight }
+        ]}>
+
+          <View style={styles.textInputWrapper}>
+            <TextInput
+              style={styles.textInput}
+              value={content}
+              onChangeText={setContent}
+              placeholder="Message"
+              placeholderTextColor="#888"
+              multiline={true}
             />
+
+            <TouchableOpacity
+              onPress={() => setDisappearing(!disappearing)}
+              style={styles.iconButton}
+            >
+              <MaterialCommunityIcons
+                name={disappearing ? "timer" : "timer-off-outline"}
+                size={24}
+                color={disappearing ? "#128C7E" : "#888"}
+              />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={[styles.sendButton, { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }]}
+            onPress={sendMessage}
+            disabled={!connected || !content.trim()}
+          >
+            <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
           </TouchableOpacity>
         </View>
-       
+      )}
 
-
-        <TouchableOpacity
-          style={[styles.sendButton, { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }]}
-          onPress={sendMessage}
-          disabled={!connected || !content.trim()}
-        >
-          <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
-      </View>
-       </KeyboardAvoidingView>
-  ):(
-    <View  style={[
-    styles.inputContainerAndroid,
-    { bottom: keyboardHeight }
-  ]}>
-
-        <View style={styles.textInputWrapper}>
-          <TextInput
-            style={styles.textInput}
-            value={content}
-            onChangeText={setContent}
-            placeholder="Message"
-            placeholderTextColor="#888"
-            multiline={true}
-          />
-
-          <TouchableOpacity
-            onPress={() => setDisappearing(!disappearing)}
-            style={styles.iconButton}
-          >
-            <MaterialCommunityIcons
-              name={disappearing ? "timer" : "timer-off-outline"}
-              size={24}
-              color={disappearing ? "#128C7E" : "#888"}
-            />
-          </TouchableOpacity>
-        </View>      
-        <TouchableOpacity
-          style={[styles.sendButton, { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }]}
-          onPress={sendMessage}
-          disabled={!connected || !content.trim()}
-        >
-          <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
-      </View>
-  )}
-    
-</View>
+    </View>
   );
 };
 const styles = StyleSheet.create({
@@ -573,16 +654,16 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   inputContainerAndroid: {
-  position: "absolute",
-  bottom: 0,
-  left: 0,
-  right: 0,
-  flexDirection: "row",
-  alignItems: "flex-end",
-  paddingHorizontal: 8,
-  paddingVertical: 8,
-  backgroundColor: "#EFEAE2",
-},
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    backgroundColor: "#EFEAE2",
+  },
   sendButton: {
     width: 48,
     height: 48,
