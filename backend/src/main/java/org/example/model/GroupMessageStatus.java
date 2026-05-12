@@ -29,10 +29,14 @@ public class GroupMessageStatus {
     @Column(name = "is_read", nullable = false)
     private boolean read;
 
-    public GroupMessageStatus(Message message, User user, boolean read) {
+    @Column(name = "is_opened")
+    private Boolean opened;
+
+    public GroupMessageStatus(Message message, User user, boolean read, boolean opened) {
         this.message = message;
         this.user = user;
         this.read = read;
+        this.opened= opened;
     }
 
 }

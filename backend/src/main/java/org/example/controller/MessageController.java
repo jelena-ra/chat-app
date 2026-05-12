@@ -148,8 +148,8 @@ public class MessageController {
         return ResponseEntity.ok(_messageService.getGroupChatPreviews(email));
     }
     @GetMapping("/group")
-    public ResponseEntity<List<MessageDTO>> getGroupMessages(@RequestParam Long groupId) {
-        List<MessageDTO> messages = _messageService.getGroupMessages(groupId);
+    public ResponseEntity<List<MessageDTO>> getGroupMessages(@RequestParam Long groupId, @RequestParam String userEmail) {
+        List<MessageDTO> messages = _messageService.getGroupMessages(groupId, userEmail);
         return ResponseEntity.ok(messages);
     }
 
@@ -161,6 +161,20 @@ public class MessageController {
             id.add(msg.getClientId());
             messagingTemplate.convertAndSendToUser(
                     msg.getReceiver().getEmail(),
+                    "/queue/message-opened",
+                    new ReadUpdateDTO("messages-opened", id)
+            );
+        }
+    }
+
+    @MessageMapping("/open-groupmessage")
+    public void openGroupMessage(OpenMessageDTO openMessageDTO) {
+        Message msg = _messageService.openGroupDisappearing(openMessageDTO.getClientId(), openMessageDTO.getUserEmail());
+        if(msg!=null && !msg.getSender().getEmail().equals(openMessageDTO.getUserEmail())) {
+            List<String> id = new ArrayList<>();
+            id.add(msg.getClientId());
+            messagingTemplate.convertAndSendToUser(
+                    openMessageDTO.getUserEmail(),
                     "/queue/message-opened",
                     new ReadUpdateDTO("messages-opened", id)
             );

@@ -30,7 +30,8 @@ public class GroupMessageStatusService {
             GroupMessageStatus status = new GroupMessageStatus(
                     message,
                     member,
-                    isSender
+                    isSender,
+                    false
             );
 
             groupMessageStatusRepository.save(status);
@@ -46,7 +47,8 @@ public class GroupMessageStatusService {
                 GroupMessageStatus status = new GroupMessageStatus(
                         message,
                         group.getAdmin(),
-                        isSender
+                        isSender,
+                        false
                 );
 
                 groupMessageStatusRepository.save(status);
@@ -65,7 +67,11 @@ public class GroupMessageStatusService {
                 groupId
         );
     }
-
+public void openDisappearingMssg(String userEmail,Long mssgId){
+    GroupMessageStatus grpStatus =  getByEmailAndMessageId(userEmail,mssgId);
+    grpStatus.setOpened(true);
+    groupMessageStatusRepository.save(grpStatus);
+}
     public boolean hasUnreadMessages(String email, Long groupId) {
         return groupMessageStatusRepository
                 .existsByUser_EmailAndMessage_Group_IdAndReadFalse(email, groupId);

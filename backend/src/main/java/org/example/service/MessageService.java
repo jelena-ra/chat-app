@@ -51,22 +51,34 @@ public class MessageService {
         return _messageRepository.save(mess);
     }
 
-    public List<MessageDTO> getGroupMessages(Long groupId) {
+    public List<MessageDTO> getGroupMessages(Long groupId, String userEmail) {
         List<Message> messages = _messageRepository.findAllByGroup_IdOrderByTimeSentAsc(groupId);
 
         List<MessageDTO> dtos = new ArrayList<>();
 
         for (Message message : messages) {
-            dtos.add(new MessageDTO(message));
+            GroupMessageStatus status = groupMessageStatusService.getByEmailAndMessageId(userEmail, message.getId());
+            MessageDTO msg = new MessageDTO(message);
+            if(msg.getDisappearingStatus()==DisappearingStatus.DISAPPEARING){
+                if (status.getOpened()) msg.setDisappearingStatus(DisappearingStatus.READ);
+            }
+
+            dtos.add(msg);
         }
 
         return dtos;
     }
+    public Message openGroupDisappearing(String clientId, String userEmail){
+        Message mssg = _messageRepository.findByClientId(clientId).orElse(null);
+        if(mssg!=null){
+            groupMessageStatusService.openDisappearingMssg(userEmail,mssg.getId());
+        }
+        return mssg;
+    }
 public Message openDisappearing(String clientId){
         Message mssg = _messageRepository.findByClientId(clientId).orElse(null);
         if(mssg!=null){
-            mssg.setDisappearingStatus(DisappearingStatus.READ);
-            mssg.setContent(null);
+
             _messageRepository.save(mssg);
         }
         return mssg;
