@@ -36,12 +36,13 @@ public class User {
     @OneToMany(
             mappedBy = "owner",
             cascade = CascadeType.ALL,
-            orphanRemoval = true
+            orphanRemoval = true,
+            fetch = FetchType.LAZY
     )
     private List<Contact> contacts = new ArrayList<>();
 
 
-    @OneToOne(cascade = CascadeType.ALL)
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JoinColumn(name = "profile_id")
     private UserProfile profile;
 

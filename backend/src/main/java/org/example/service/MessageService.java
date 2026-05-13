@@ -78,7 +78,7 @@ public class MessageService {
 public Message openDisappearing(String clientId){
         Message mssg = _messageRepository.findByClientId(clientId).orElse(null);
         if(mssg!=null){
-
+            mssg.setDisappearingStatus(DisappearingStatus.READ);
             _messageRepository.save(mssg);
         }
         return mssg;
@@ -101,6 +101,7 @@ public Message openDisappearing(String clientId){
                 previews.add(new GroupChatDTO(
                         group.getId(),
                         group.getName(),
+                        group.getAdmin().getEmail(),
                         null,
                         null,
                         null,
@@ -114,6 +115,7 @@ public Message openDisappearing(String clientId){
                 previews.add(new GroupChatDTO(
                         group.getId(),
                         group.getName(),
+                        group.getAdmin().getEmail(),
                         lastMessage.getContent(),
                         lastMessage.getTimeSent().toString(),
                         lastMessage.getSender().getEmail(),
@@ -129,7 +131,7 @@ public Message openDisappearing(String clientId){
         Long senderId = userService.getByEmail(senderEmail).getId();
         Long receiverId = userService.getByEmail(receiverEmail).getId();
         List<MessageDTO> list = new ArrayList<MessageDTO>();
-         _messageRepository.findAllBySender_IdAndReceiver_IdOrSender_IdAndReceiver_Id(senderId,receiverId, receiverId, senderId).forEach(m-> list.add(new MessageDTO(m)));
+         _messageRepository.findAllBySender_IdAndReceiver_IdOrSender_IdAndReceiver_IdOrderByTimeSentAsc(senderId,receiverId, receiverId, senderId).forEach(m-> list.add(new MessageDTO(m)));
          return list;
     }
 /*

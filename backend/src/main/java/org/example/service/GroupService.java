@@ -1,6 +1,7 @@
 package org.example.service;
 
 
+import org.example.dtos.GroupResponseDTO;
 import org.example.model.Group;
 import org.example.model.User;
 import org.example.repository.GroupRepository;
@@ -48,8 +49,16 @@ public class GroupService {
         User user = userService.getByEmail(email);
         return _groupRepository.findAllByMembersContainingOrAdmin(user, user);
     }
+    public List<String> getMembers(Long groupId){
+        Group group =  _groupRepository.findByIdWithMembers(groupId).orElse(null);
+        List<String> members = new ArrayList<>();
+        if(group!=null){
+            group.getMembers().stream().forEach(m->members.add(m.getEmail()));
+        }
+        return members;
+    }
 
-    public Group addMember(Long groupId, String email) {
+    public GroupResponseDTO addMember(Long groupId, String email) {
         Group group = getById(groupId);
         User user = userService.getByEmail(email);
 
@@ -60,7 +69,8 @@ public class GroupService {
             group.getMembers().add(user);
         }
 
-        return _groupRepository.save(group);
+         _groupRepository.save(group);
+        return new GroupResponseDTO(group.getId(),group.getName(),group.getAdmin().getEmail(),group.getMembers().stream().map(User::getEmail).toList());
     }
 
     public Group removeMember(Long groupId, String email) {
@@ -69,7 +79,7 @@ public class GroupService {
         group.getMembers().removeIf(member -> member.getEmail().equals(email));
         return _groupRepository.save(group);
     }
-    public Group createGroup(String name, String adminEmail, List<String> memberEmails) {
+    public GroupResponseDTO createGroup(String name, String adminEmail, List<String> memberEmails) {
         User admin = userService.getByEmail(adminEmail);
 
         Group group = new Group();
@@ -77,7 +87,7 @@ public class GroupService {
         group.setAdmin(admin);
 
         List<User> members = new ArrayList<>();
-
+        List<String> memberEmailsVerified = new ArrayList<>();
         if (memberEmails != null) {
             for (String memberEmail : memberEmails) {
                 User user = userService.getByEmail(memberEmail);
@@ -87,6 +97,8 @@ public class GroupService {
 
                 if (!alreadyAdded) {
                     members.add(user);
+                   memberEmailsVerified.add(memberEmail);
+
                 }
             }
         }
@@ -100,7 +112,8 @@ public class GroupService {
 
         group.setMembers(members);
 
-        return _groupRepository.save(group);
+        Group setGroup = _groupRepository.save(group);
+        return new GroupResponseDTO(setGroup.getId(), setGroup.getName(), setGroup.getAdmin().getEmail(),memberEmailsVerified);
     }
 
 }

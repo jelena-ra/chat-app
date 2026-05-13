@@ -5,7 +5,7 @@ import { useChatSocket } from '@/components/ChatSocketContext';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { StompSubscription } from "@stomp/stompjs";
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, AppStateStatus, FlatList, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -111,7 +111,7 @@ export default function Chat() {
     receiverKeys();
 
 
-  }, [receiverEmail, privateEncryptingKey, token, publicEncryptingKeyReceiver])
+  }, [receiverEmail, privateEncryptingKey, token ])
 
   useEffect(() => {
     if (!email || !receiverEmail) return;
@@ -148,7 +148,7 @@ export default function Chat() {
         readsubscriptionRef.current.unsubscribe();
       }
 
-       if (openedsubscriptionRef.current) {
+      if (openedsubscriptionRef.current) {
         openedsubscriptionRef.current.unsubscribe();
       }
 
@@ -212,12 +212,12 @@ export default function Chat() {
             ...prev,
             ...updatedChats,
           };
-        });
+      });
 
       });
 
 
-       openedsubscriptionRef.current = stompClient.current.subscribe(`/user/${email}/queue/message-opened`, (message) => {
+      openedsubscriptionRef.current = stompClient.current.subscribe(`/user/${email}/queue/message-opened`, (message) => {
 
 
         const messageUpdate = JSON.parse(message.body);
@@ -304,11 +304,13 @@ export default function Chat() {
 
         const messages = await response.json();
 
-
+        console.log("AAAAAA POPULATE CHAT START, messages length:", messages.length);
+      console.log("AAAAAA FIRST MESSAGE RAW:", messages[0]);
         if (!isMounted) return;
 
         const filteredkeys = messages.map((msg: any) => {
           const chatKey = msg.senderEmail === email ? msg.receiverEmail : msg.senderEmail;
+      
           try {
             if (msg.disappearingStatus === "READ") {
               msg.content = "";
@@ -318,6 +320,8 @@ export default function Chat() {
           } catch (error) {
             console.log("error with decryption: " + error);
           }
+              
+          console.log("evo ga clientid:" + msg.clientId + " to je poruka: " + msg.content);
           return { ...msg, chatKey };
         });
 
@@ -405,18 +409,20 @@ export default function Chat() {
     }));
 
     stompClient.current?.publish({
-      destination:'/socket-subscriber/open-message',
-      body:JSON.stringify({
-          clientId: item.clientId,
-          userEmail: email
-        })
+      destination: '/socket-subscriber/open-message',
+      body: JSON.stringify({
+        clientId: item.clientId,
+        userEmail: email
+      })
     })
     setTimeout(() => {
       setRevealedMessages((prev) => ({
         ...prev,
         [item.clientId]: false,
       }));
-    }, 10000); 
+    
+    }, 10000);
+   
   }
 
   function encrypt(shared: Uint8Array, json: any) {
@@ -469,7 +475,18 @@ export default function Chat() {
      return nacl.sign.detached.verify(messageBytes, signature2, publicKey);
    }*/
   return (
+   
     <View style={{ flex: 1 }}>
+       {(<Stack.Screen
+                options={{
+                    headerLeft: () => (
+                         <View style={{flexDirection:"row", justifyContent:"space-between"}}>
+                         <MaterialCommunityIcons name="account" size={34} color="#5a3e36" />     
+                        <Text style={{ fontWeight:"bold", fontSize:15,padding:5,margin:5}}>{receiverEmail}</Text>
+                        </View>
+                    ),
+                }}
+            />)}
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="#128C7E" />
@@ -479,7 +496,7 @@ export default function Chat() {
           inverted={true}
           data={[...messages].reverse()}
           keyboardShouldPersistTaps="handled"
-          keyExtractor={(_, index) => index.toString()}
+          keyExtractor={(item) => item.clientId}
           contentContainerStyle={{ paddingBottom: 80 }}
           renderItem={({ item }) => {
             const isMe = item.senderEmail === email;
@@ -499,7 +516,7 @@ export default function Chat() {
 
                 {/*#DCF8C6 */}
                 <TouchableOpacity
-                  disabled={item.disappearingStatus !== "DISAPPEARING" || item.senderEmail===email}
+                  disabled={item.disappearingStatus !== "DISAPPEARING" || item.senderEmail === email}
                   onPress={() => revealMessage(item)}
                   style={{
                     backgroundColor: isMe ? "#dfc490" : "#ececec",
@@ -511,24 +528,25 @@ export default function Chat() {
                     opacity: item.disappearingStatus === "NOT_DISAPPEARING" && !revealedMessages[item.clientId] ? 1 : 0.4,
                     fontStyle: item.disappearingStatus === "DISAPPEARING" ? "italic" : "normal",
                   }}>
-                     {item.disappearingStatus === "READ"
-    ? <Text>Disappearing <MaterialCommunityIcons name="clock-fast"/></Text>
+                    {item.disappearingStatus === "READ" &&
+!revealedMessages[item.clientId]
+                      ? <Text>Disappearing <MaterialCommunityIcons name="clock-fast" /></Text>
 
-    : item.disappearingStatus === "DISAPPEARING" &&
-      item.senderEmail !== email
+                      : item.disappearingStatus === "DISAPPEARING" &&
+                        item.senderEmail !== email
 
-      ? revealedMessages[item.clientId]
-        ? item.content
-        : "Tap to reveal 👀"
+                        ? revealedMessages[item.clientId]
+                          ? item.content
+                          : "Tap to reveal 👀"
 
-      : item.disappearingStatus === "DISAPPEARING" &&
-        item.senderEmail === email
+                        : item.disappearingStatus === "DISAPPEARING" &&
+                          item.senderEmail === email
 
-        ? <Text>Disappearing <MaterialCommunityIcons name="clock-fast"/></Text>
+                          ? <Text>Disappearing <MaterialCommunityIcons name="clock-fast" /></Text>
 
-        : sharedKey
-          ? item.content
-          : "Decrypting..."}
+                          : sharedKey
+                            ? item.content
+                            : "Decrypting..."}
                   </Text>
                   <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                     <Text style={{ fontSize: 10, color: "gray", marginTop: 5 }}>

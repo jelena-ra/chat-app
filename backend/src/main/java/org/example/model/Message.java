@@ -46,7 +46,7 @@ public class Message {
     @JoinColumn(name="receiver_id", nullable = true)
     private User receiver;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "group_id", nullable = true)
     private Group group;
 

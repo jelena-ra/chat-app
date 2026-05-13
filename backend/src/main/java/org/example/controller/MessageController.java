@@ -95,11 +95,13 @@ public class MessageController {
     @GetMapping("/getfromChat")
     private ResponseEntity<List<MessageDTO>> getFromChat(@RequestParam String senderEmail, @RequestParam String receiverEmail){
         List<MessageDTO> list = _messageService.getFromChat(senderEmail, receiverEmail);
+        System.out.println(">>> /messages/getfromChats called");
         return ResponseEntity.ok(list);
     }
 
     @GetMapping("/getChats")
     private ResponseEntity <Map<String,MessageDTO>>getChats (@RequestParam String userEmail){
+        System.out.println(">>> /messages/getChats called");
         return ResponseEntity.ok(_messageService.getChatsAndLastMessage(userEmail));
     }
 
@@ -145,11 +147,13 @@ public class MessageController {
 
     @GetMapping("/groupChats")
     public ResponseEntity<List<GroupChatDTO>> getGroupChats(@RequestParam String email) {
+        System.out.println(">>> /messages/groupChats called");
         return ResponseEntity.ok(_messageService.getGroupChatPreviews(email));
     }
     @GetMapping("/group")
     public ResponseEntity<List<MessageDTO>> getGroupMessages(@RequestParam Long groupId, @RequestParam String userEmail) {
         List<MessageDTO> messages = _messageService.getGroupMessages(groupId, userEmail);
+        System.out.println(">>> /messages/group called");
         return ResponseEntity.ok(messages);
     }
 

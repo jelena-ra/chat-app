@@ -1,5 +1,6 @@
 import IP_ADDRESS from '@/assets/config';
 import { fetchWithAuth } from '@/assets/fetch';
+import { loadFriendsCache } from '@/assets/friendsCached';
 import {
     decryptGroupMessage,
     decryptMyGroupKey,
@@ -9,9 +10,9 @@ import {
 import { useAuth } from '@/components/AuthContext';
 import { useChatSocket } from '@/components/ChatSocketContext';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { StompSubscription } from '@stomp/stompjs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -34,18 +35,22 @@ interface GroupMessageDTO {
 export default function GroupChat() {
     const params = useLocalSearchParams();
     const groupId = Number(Array.isArray(params.groupId) ? params.groupId[0] : params.groupId);
-
+    const groupAdmin = String(Array.isArray(params.groupAdmin) ? params.groupAdmin[0] : params.groupAdmin);
+    const groupName = String(Array.isArray(params.groupName) ? params.groupName[0] : params.groupName);
     const { email, token, privateSigningKey, privateEncryptingKey } = useAuth();
     const { stompClient, connected } = useChatSocket();
     const insets = useSafeAreaInsets();
     const [addMemberVisible, setAddMemberVisible] = useState(false);
-    const [newMemberEmail, setNewMemberEmail] = useState('');
+    const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+    const [groupMembers, setGroupMembers] = useState<string[]>([]);
+    const [friends, setFriends] = useState<string[]>([]);
 
     const [content, setContent] = useState('');
     const [messages, setMessages] = useState<GroupMessageDTO[]>([]);
     const [groupKey, setGroupKey] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const openedsubscriptionRef = useRef<StompSubscription | null>(null);
+
 
     const subscriptionRef = useRef<StompSubscription | null>(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -68,6 +73,24 @@ export default function GroupChat() {
             hide.remove();
         };
     }, []);
+
+    useEffect(() => {
+        async function loadFriends() {
+            if (!token) return;
+
+            const loadedFriends = await loadFriendsCache(token);
+
+            setFriends(
+                loadedFriends.filter(
+                    (friendEmail) => !groupMembers.includes(friendEmail)
+                )
+            );
+        }
+
+        if (addMemberVisible) {
+            loadFriends();
+        }
+    }, [addMemberVisible, token, groupMembers]);
 
     useEffect(() => {
         if (!stompClient.current || !connected || !email || !groupId) return;
@@ -136,6 +159,36 @@ export default function GroupChat() {
     }, [groupId, email, token, privateEncryptingKey]);
 
     useEffect(() => {
+        async function loadGroupMembers() {
+            if (!groupId || !token) return;
+
+            try {
+                const response = await fetchWithAuth(
+                    `http://${IP_ADDRESS}:8080/groups/members?groupId=${groupId}`,
+                    {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                    },
+                    token
+                );
+
+                if (!response.ok) {
+                    throw new Error(`Failed loading members: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                setGroupMembers(data);
+            } catch (error) {
+                console.log("Load group members error:", error);
+            }
+        }
+        loadGroupMembers();
+    }, [token, groupId])
+
+    useEffect(() => {
         async function loadOldMessages() {
             if (!groupId || !token || !groupKey) return;
 
@@ -197,7 +250,7 @@ export default function GroupChat() {
         }, 10000);
     }
 
-    async function handleAddMember() {
+    /*async function handleAddMember() {
         if (!email || !token || !groupId || !newMemberEmail.trim()) {
             Alert.alert('Error', 'Enter email.');
             return;
@@ -231,11 +284,49 @@ export default function GroupChat() {
             console.log('Add member error:', error);
             Alert.alert('Error', 'Could not add member.');
         }
+    }*/
+
+    async function handleAddMember() {
+        if (!email || !token || !groupId || selectedMembers.length === 0) {
+            Alert.alert('Error', 'Select at least one member.');
+            return;
+        }
+
+        try {
+            for (const memberEmail of selectedMembers) {
+                const response = await fetchWithAuth(
+                    `http://${IP_ADDRESS}:8080/groups/add-member`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            groupId,
+                            memberEmail,
+                            requesterEmail: email,
+                        }),
+                    },
+                    token
+                );
+
+                if (!response.ok) {
+                    throw new Error(`Add member failed: ${response.status}`);
+                }
+            }
+
+            Alert.alert('Success', 'Member added.');
+            setSelectedMembers([]);
+            setAddMemberVisible(false);
+        } catch (error) {
+            console.log('Add member error:', error);
+            Alert.alert('Error', 'Could not add member.');
+        }
     }
 
     useEffect(() => {
         if (!connected || !stompClient.current || !groupId || !groupKey) return;
-
+        console.log("Admin: " + groupAdmin);
         console.log("SUBSCRIBING TO GROUP:", `/topic/group/${groupId}`);
 
         if (openedsubscriptionRef.current) {
@@ -331,19 +422,37 @@ export default function GroupChat() {
         }
     };
 
+    function toggleMember(friendEmail: string) {
+        setSelectedMembers((prev) =>
+            prev.includes(friendEmail)
+                ? prev.filter((m) => m !== friendEmail)
+                : [...prev, friendEmail]
+        );
+    }
+
     return (
 
 
         <View style={{ flex: 1 }}>
-            <Stack.Screen
+            {groupAdmin === email ? (<Stack.Screen
                 options={{
                     headerRight: () => (
                         <TouchableOpacity onPress={() => setAddMemberVisible(true)}>
-                            <MaterialCommunityIcons name="dots-vertical" size={26} color="#745858" />
+                            <MaterialCommunityIcons name="dots-vertical" size={23} color="#745858" />
                         </TouchableOpacity>
                     ),
                 }}
-            />
+            />) : null}
+            {(<Stack.Screen
+                options={{
+                    headerLeft: () => (
+                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                            <MaterialCommunityIcons name="account-group" size={34} color="#5a3e36" />
+                            <Text style={{ fontWeight: "bold", fontSize: 15, padding: 5, margin: 5 }}>{groupName}</Text>
+                        </View>
+                    ),
+                }}
+            />)}
             {isLoading ? (
                 <View style={styles.loader}>
                     <ActivityIndicator size="large" color="#128C7E" />
@@ -390,7 +499,7 @@ export default function GroupChat() {
                                                 opacity: item.disappearingStatus === "NOT_DISAPPEARING" && !revealedMessages[item.clientId] ? 1 : 0.4,
                                                 fontStyle: item.disappearingStatus === "DISAPPEARING" ? "italic" : "normal",
                                             }}>
-                                                {item.disappearingStatus === "READ"
+                                                {item.disappearingStatus === "READ" && !revealedMessages[item.clientId]
                                                     ? <Text>Disappearing <MaterialCommunityIcons name="clock-fast" /></Text>
 
                                                     : item.disappearingStatus === "DISAPPEARING" &&
@@ -429,14 +538,25 @@ export default function GroupChat() {
                     <View style={styles.modalCard}>
                         <Text style={styles.modalTitle}>Add member</Text>
 
-                        <TextInput
-                            style={styles.modalInput}
-                            placeholder="Enter user email"
-                            placeholderTextColor="#999"
-                            value={newMemberEmail}
-                            onChangeText={setNewMemberEmail}
-                            autoCapitalize="none"
-                        />
+                        <ScrollView style={{maxHeight:300}}>
+                            {friends.map((item) => {
+                                const selected = selectedMembers.includes(item);
+
+                                return (
+                                    <TouchableOpacity
+                                        key={item}
+                                        style={[styles.friendItem, selected && styles.friendItemSelected]}
+                                        onPress={() => toggleMember(item)}
+                                    >
+                                        <Text style={styles.friendText}>{item}</Text>
+
+                                        {selected && (
+                                            <Ionicons name="checkmark-circle" size={20} color="#5a3e36" />
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
 
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
@@ -556,6 +676,23 @@ const styles = StyleSheet.create({
         minHeight: 48,
         maxHeight: 120,
         marginRight: 8,
+    },
+    friendItem: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        padding: 12,
+        borderRadius: 10,
+        backgroundColor: "#f5f5f5",
+        marginBottom: 6,
+    },
+
+    friendItemSelected: {
+        backgroundColor: "#e8d7c5",
+    },
+
+    friendText: {
+        fontSize: 14,
+        color: "#333",
     },
     iconButton: {
         padding: 8,

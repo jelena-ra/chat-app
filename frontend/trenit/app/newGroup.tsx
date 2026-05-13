@@ -1,13 +1,13 @@
 import IP_ADDRESS from '@/assets/config';
 import { fetchWithAuth } from '@/assets/fetch';
-import { friendsCache } from "@/assets/friendsCached";
+import { loadFriendsCache } from "@/assets/friendsCached";
 import { useAuth } from '@/components/AuthContext';
 import Button from '@/components/Button';
 import Background from '@/components/GlobalBackground';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
@@ -31,13 +31,26 @@ export default function NewGroup() {
   const { email, token, privateEncryptingKey } = useAuth();
 const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
 
-const friends = Object.keys(friendsCache).filter(
+/*const friends = Object.keys(friendsCache).filter(
   (email) => friendsCache[email] === true
-);
+);*/
   const [groupName, setGroupName] = useState('');
   const [membersText, setMembersText] = useState('');
   const [creating, setCreating] = useState(false);
 
+     const [friends, setFriends] = useState<string[]>([]);
+  
+          
+          useEffect(() => {
+              async function loadFriends() {
+                  if (!token) return;
+      
+                  const loadedFriends = await loadFriendsCache(token);
+      
+                  setFriends(loadedFriends);
+              }
+              loadFriends();
+          }, [ token]);
 
   function toggleMember(friendEmail: string) {
   setSelectedMembers((prev) =>
@@ -185,6 +198,7 @@ const friends = Object.keys(friendsCache).filter(
         params: {
           groupId,
           groupName: groupName.trim(),
+          groupAdmin: email
         },
       });
     } catch (error) {
@@ -227,7 +241,7 @@ const friends = Object.keys(friendsCache).filter(
 
            <Text style={styles.label}>Members</Text>
 
-<View>
+<ScrollView style={{maxHeight:100}}>
   {friends.map((item) => {
     const selected = selectedMembers.includes(item);
 
@@ -245,7 +259,7 @@ const friends = Object.keys(friendsCache).filter(
       </TouchableOpacity>
     );
   })}
-</View>
+</ScrollView>
 
             <View style={styles.infoBox}>
               <Ionicons name="lock-closed" size={18} color="#7a5650" />
@@ -257,7 +271,7 @@ const friends = Object.keys(friendsCache).filter(
             <View style={styles.buttonWrap}>
               <Button
                 label={creating ? 'Creating...' : 'Create group'}
-                onPress={handleCreateGroup}
+                onPress={creating ? undefined : handleCreateGroup}
               />
             </View>
           </View>

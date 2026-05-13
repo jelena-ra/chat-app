@@ -13,6 +13,7 @@ import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'r
 
 interface GroupChatItem {
     groupId: number;
+    admin:string;
     groupName: string;
     lastMessageContent: string | null;
     lastMessageTime: string | null;
@@ -31,6 +32,8 @@ export default function GroupHome() {
     const filteredGroups = groups.filter((group) =>
         group.groupName.toLowerCase().includes(searchText.toLowerCase())
     );
+
+    const [friends, setFriends] = useState<string[]>([]);
 
     useEffect(() => {
         if (!connected || !stompClient.current || groups.length === 0) return;
@@ -95,11 +98,13 @@ export default function GroupHome() {
     }, [email, token]);
 
     function handleGroupPress(group: GroupChatItem) {
+        console.log(group);
         router.push({
             pathname: '/groupchat',
             params: {
                 groupId: group.groupId,
                 groupName: group.groupName,
+                groupAdmin: group.admin
             },
         });
     }

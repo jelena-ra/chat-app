@@ -24,4 +24,5 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
     WHERE g.id = :id
 """)
     Optional<Group> findByIdWithMembersAndAdmin(Long id);
+
 }

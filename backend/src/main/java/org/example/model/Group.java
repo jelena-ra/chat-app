@@ -23,7 +23,7 @@ public class Group {
 
     private String name;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "group_members",
             joinColumns = @JoinColumn(name = "group_id"),
@@ -31,7 +31,7 @@ public class Group {
     )
     private List<User> members = new ArrayList<>();
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "admin_id")
     private User admin;
 }

@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 
 interface AuthContextType {
   email: string | null;
+  isAuthLoading: boolean,
   token: string | null;
   privateSigningKey: string | null;
   privateEncryptingKey: string | null;
@@ -21,6 +22,7 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [email, setEmail] = useState<string | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [token, setToken] = useState<string | null>(null);
   const [privateSigningKey, setPrivateSigningKey] = useState<string | null>(null);
   const [privateEncryptingKey, setPrivateEncryptingKey] = useState<string | null>(null);
@@ -56,12 +58,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       if (storedEmail != null) setEmail(storedEmail);
       if (storedToken) setToken(storedToken);
+      setIsAuthLoading(false);
     };
     loadData();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ email, token, privateSigningKey, privateEncryptingKey, 
+    <AuthContext.Provider value={{ email,isAuthLoading, token, privateSigningKey, privateEncryptingKey, 
       setEmail, setToken, setPrivateSigningKey, setPrivateEncryptingKey }}>
       {children}
     </AuthContext.Provider>

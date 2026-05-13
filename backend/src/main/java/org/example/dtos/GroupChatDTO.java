@@ -13,6 +13,7 @@ public class GroupChatDTO {
 
     private Long groupId;
     private String groupName;
+    private String admin;
     private String lastMessageContent;
     private String lastMessageTime;
     private String lastSenderEmail;
