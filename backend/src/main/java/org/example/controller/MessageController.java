@@ -5,6 +5,7 @@ import org.example.dtos.MessageDTO;
 import org.example.dtos.OpenMessageDTO;
 import org.example.dtos.ReadUpdateDTO;
 import org.example.model.Group;
+import org.example.model.Image;
 import org.example.model.Message;
 import org.example.service.GroupMessageStatusService;
 import org.example.service.GroupService;
@@ -12,12 +13,15 @@ import org.example.service.MessageService;
 import org.example.service.UserService;
 import org.example.service.presence.ActiveChatStore;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -183,5 +187,19 @@ public class MessageController {
                     new ReadUpdateDTO("messages-opened", id)
             );
         }
+    }
+    @GetMapping("/images/{id}")
+    public ResponseEntity<byte[]> getImage(@PathVariable Long id) {
+        Image image = _messageService.findImageById(id);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(image.getContentType()))
+                .body(image.getData());
+    }
+    @PostMapping("/images")
+    public ResponseEntity<List<Long>> uploadImages(
+            @RequestParam("files") List<MultipartFile> files
+    ) throws IOException {
+        return ResponseEntity.ok(_messageService.addImages(files));
     }
 }

@@ -5,6 +5,9 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.example.model.enums.DisappearingStatus;
 
 import java.time.LocalDateTime;
@@ -50,5 +53,12 @@ public class Message {
     @JoinColumn(name = "group_id", nullable = true)
     private Group group;
 
+    @OneToMany(/*cascade = CascadeType.ALL, orphanRemoval = true*/)
+    @JoinTable(
+            name = "message_images",
+            joinColumns = @JoinColumn(name = "message_id"),
+            inverseJoinColumns = @JoinColumn(name = "image_id")
+    )
+    private List<Image> images = new ArrayList<>();
 
 }

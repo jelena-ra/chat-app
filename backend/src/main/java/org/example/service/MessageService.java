@@ -3,10 +3,7 @@ package org.example.service;
 import jakarta.transaction.Transactional;
 import org.example.dtos.GroupChatDTO;
 import org.example.dtos.MessageDTO;
-import org.example.model.Group;
-import org.example.model.GroupMessageStatus;
-import org.example.model.Message;
-import org.example.model.User;
+import org.example.model.*;
 import org.example.model.enums.DisappearingStatus;
 import org.example.repository.MessageRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,13 +11,17 @@ import org.springframework.stereotype.Service;
 
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
 import org.bouncycastle.crypto.signers.Ed25519Signer;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.toList;
 
 @Service
 public class MessageService {
@@ -35,6 +36,9 @@ public class MessageService {
     private GroupService groupService;
 
     @Autowired
+    private ImageService imageService;
+
+    @Autowired
     private GroupMessageStatusService groupMessageStatusService;
 
     public Message saveMessage(MessageDTO message){
@@ -47,7 +51,16 @@ public class MessageService {
         if(message.getGroupId()!=null){
          group = groupService.getById(message.getGroupId());
             }
-        Message mess = new Message(null,message.getClientId(),message.getContent(), message.getSignature() , message.getDisappearingStatus(),false, false, message.isRead(), LocalDateTime.now(),sender, receiver, group);
+        List<Image> images = new ArrayList<>();
+        if (message.getImageIds() != null && !message.getImageIds().isEmpty()) {
+            images = message.getImageIds()
+                    .stream()
+                    .filter(id -> id != null)
+                    .map(id -> imageService.findById(id))
+                    .toList();
+        }
+        Message mess = new Message(null,message.getClientId(),message.getContent(), message.getSignature() , message.getDisappearingStatus(),false, false, message.isRead(), LocalDateTime.now(),sender, receiver, group,images);
+
         return _messageRepository.save(mess);
     }
 
@@ -74,6 +87,21 @@ public class MessageService {
             groupMessageStatusService.openDisappearingMssg(userEmail,mssg.getId());
         }
         return mssg;
+    }
+
+    public List<Long> addImages( List<MultipartFile> files) throws IOException {
+        List<Long> ids = new ArrayList<>();
+
+        for (MultipartFile file : files) {
+            Image created = imageService.createImageFromFile(file);
+            Image saved = imageService.saveImage(created);
+            ids.add(saved.getId());
+        }
+        return ids;
+    }
+
+    public Image findImageById(Long id){
+        return imageService.findById(id);
     }
 public Message openDisappearing(String clientId){
         Message mssg = _messageRepository.findByClientId(clientId).orElse(null);
@@ -165,7 +193,8 @@ public Message openDisappearing(String clientId){
                         p.getSenderEmail(),
                         p.getReceiverEmail(),
                         p.getRead(),
-                        p.getGroupId()
+                        p.getGroupId(),
+                        p.getImageIds()
                 ))
                 .collect(Collectors.toMap(
                         msg -> msg.getSenderEmail().equals(userEmail)

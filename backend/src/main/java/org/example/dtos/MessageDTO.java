@@ -6,11 +6,14 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.example.model.Image;
 import org.example.model.Message;
 import org.example.model.User;
 import org.example.model.enums.DisappearingStatus;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -32,6 +35,7 @@ public class MessageDTO {
     private String receiverEmail;
     private boolean isRead;
     private Long groupId;
+    private List<Long> imageIds;
 
     public MessageDTO(Message message){
         this.clientId= message.getClientId();
@@ -48,5 +52,11 @@ public class MessageDTO {
         this.groupId = message.getGroup().getId();}else{
             this.groupId=null;
         }
+        this.imageIds = message.getImages() == null
+                ? new ArrayList<>()
+                : message.getImages()
+                .stream()
+                .map(Image::getId)
+                .toList();
     }
 }
