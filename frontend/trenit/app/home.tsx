@@ -27,6 +27,7 @@ interface MessageDTO {
     read: boolean;
     senderEmail?: string;
     receiverEmail?: string;
+    imageIds?:number[];
 }
 
 interface ChatItem {
@@ -36,6 +37,7 @@ interface ChatItem {
     timeSent: string;
     isRead: boolean;
     senderEmail: string;
+    imageIds:number[];
 }
 
 const publicKeysCache: Record<string, { publicEncryptingkey: string }> = {};
@@ -168,14 +170,19 @@ export default function Home() {
                     if(lastMessageDTO.disappearingStatus!=="NOT_DISAPPEARING"){
                         content="disappearing message..."
                     }
+                    if ((lastMessageDTO.imageIds?.length ?? 0) > 0) {
+                        content = "image";
+                    }
                     console.log("Is read? " + lastMessageDTO.read);
+                    console.log(lastMessageDTO.imageIds);
                     return {
                         partnerEmail,
                         imageUri,
                         content,
                         timeSent: lastMessageDTO.timeSent.slice(5, 16).replace("T", " "),
                         isRead: lastMessageDTO.read,
-                        senderEmail
+                        senderEmail,
+                        imageIds:lastMessageDTO.imageIds ?? []
                     };
 
                 }
@@ -291,7 +298,9 @@ export default function Home() {
                         <View style={styles.nameAndMssg}>
                             <View style={styles.name}><Text style={(!item.isRead && item.senderEmail !== email) ? styles.notRead : null}>{item.partnerEmail}</Text>
                             </View>
-                            <View style={styles.mssg}><Text numberOfLines={1} ellipsizeMode="tail">{item.content}</Text></View>
+                                <View style={styles.mssg}>
+                                    <Text numberOfLines={1} ellipsizeMode="tail">{item.content} </Text>
+                                    {item.imageIds.length !== 0 ?<MaterialCommunityIcons name='image' style={{padding:2, alignSelf:"center"}}/> : null}</View>
                         </View>
                         <View style={styles.notifAndTime}>
                             <View style={styles.name}><Text>{item.timeSent}</Text></View>
@@ -386,6 +395,7 @@ const styles = StyleSheet.create({
     name: {},
     mssg: {
         maxWidth: "90%",
+        flexDirection:"row"
     },
     read: {
 

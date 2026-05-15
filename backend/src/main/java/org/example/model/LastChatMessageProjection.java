@@ -15,4 +15,5 @@ public interface LastChatMessageProjection {
     Long getGroupId();
     DisappearingStatus getDisappearingStatus();
     List<Long> getImageIds();
+
 }

@@ -18,7 +18,7 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     Optional<Message> findByClientId(String clientId);
     List<Message> findAllBySender_IdOrReceiver_IdOrderByTimeSentDesc(Long id, Long id2);
 
-    @Query(value = """
+    /*@Query(value = """
     SELECT DISTINCT ON (
         LEAST(m.sender_id, m.receiver_id),
         GREATEST(m.sender_id, m.receiver_id)
@@ -37,6 +37,43 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
         LEAST(m.sender_id, m.receiver_id),
         GREATEST(m.sender_id, m.receiver_id),
         m.time_sent DESC
+""", nativeQuery = true)
+    List<LastChatMessageProjection> findLastMessagesPerChat(@Param("userId") Long userId);*/
+    @Query(value = """
+SELECT DISTINCT ON (
+    LEAST(m.sender_id, m.receiver_id),
+    GREATEST(m.sender_id, m.receiver_id)
+)
+    m.client_id AS clientId,
+    m.content AS content,
+    m.time_sent AS timeSent,
+    s.email AS senderEmail,
+    r.email AS receiverEmail,
+    m.is_read AS read,
+    m.disappearing_status AS disappearingStatus,
+    m.group_id AS groupId,
+    COALESCE(array_agg(mi.image_id) FILTER (WHERE mi.image_id IS NOT NULL), '{}') AS imageIds
+FROM message m
+JOIN users s ON s.id = m.sender_id
+JOIN users r ON r.id = m.receiver_id
+LEFT JOIN message_images mi ON mi.message_id = m.id
+WHERE m.sender_id = :userId OR m.receiver_id = :userId
+GROUP BY
+    m.id,
+    m.client_id,
+    m.content,
+    m.time_sent,
+    s.email,
+    r.email,
+    m.is_read,
+    m.disappearing_status,
+    m.group_id,
+    m.sender_id,
+    m.receiver_id
+ORDER BY
+    LEAST(m.sender_id, m.receiver_id),
+    GREATEST(m.sender_id, m.receiver_id),
+    m.time_sent DESC
 """, nativeQuery = true)
     List<LastChatMessageProjection> findLastMessagesPerChat(@Param("userId") Long userId);
 

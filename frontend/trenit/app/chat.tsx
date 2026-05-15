@@ -431,8 +431,6 @@ export default function Chat() {
             : msg
         ),
       }));
-
-
     }
   };
 
@@ -528,17 +526,19 @@ export default function Chat() {
 
     const formData = new FormData();
 
+
     imageUris.forEach((uri, index) => {
       const fileName = uri.split("/").pop() ?? `image-${index}.jpg`;
 
-      formData.append("files", {
-        uri,
-        name: fileName,
-        type: "image/jpeg",
-      } as any);
-    });
+        console.log("ANDROID UPLOAD URI:", uri);
+       formData.append("files", {
+      uri: Platform.OS === "android" ? uri : uri.replace("file://", ""),
+      name: fileName,
+      type: "image/jpeg",
+    } as any);
+  });
 
-    const response = await fetchWithAuth(
+    const response = await fetch(
       `http://${IP_ADDRESS}:8080/messages/images`,
       {
         method: "POST",
@@ -546,7 +546,6 @@ export default function Chat() {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        token
       }
     );
 
@@ -675,7 +674,7 @@ export default function Chat() {
                     <Text style={{ fontSize: 10, color: "gray", marginTop: 5 }}>
                       {new Date(item.timeSent).toLocaleTimeString()}
                     </Text>
-                    {(isMe && !item.read) ? <MaterialIcons name="check" size={13} /> : null}
+                    {(isMe && !item.read && !item.sending) ? <MaterialIcons name="check" size={13} /> : null}
                     {(isMe && item.read) ? <MaterialCommunityIcons name="check-all" size={13} color="#29889d" /> : null}
                   </View>
                 </TouchableOpacity>
@@ -751,9 +750,9 @@ export default function Chat() {
 
 
               <TouchableOpacity
-                style={[styles.sendButton, { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }]}
+                style={[styles.sendButton, { backgroundColor: connected && (content.trim() || selectedImages.length!==0) ? '#128C7E' : '#A0A0A0' }]}
                 onPress={sendMessage}
-                disabled={!connected || !content.trim()}
+                disabled={/*!connected ||*/ (!content.trim() && selectedImages.length===0) }
               >
                 <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
@@ -764,7 +763,36 @@ export default function Chat() {
           styles.inputContainerAndroid,
           { bottom: keyboardHeight }
         ]}>
+           {selectedImages.length > 0 && (
+              <View style={styles.selectedImagesRow}>
+                {selectedImages.map((uri) => (
+                  <View key={uri} style={styles.imageWrapper}>
+                     <Image source={{
+                      uri: uri, headers: {
+                        Authorization: `Bearer ${token}`,
+                      },
+                    }} style={styles.selectedImage} />
+                
 
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() =>
+                        setSelectedImages((prev) =>
+                          prev.filter((img) => img !== uri)
+                        )
+                      }
+                    >
+                      <MaterialCommunityIcons
+                        name="close"
+                        size={14}
+                        color="white"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                ))}
+              </View>
+            )}
           <View style={styles.bottomRow}>
             <View style={styles.textInputWrapper}>
               <TextInput
@@ -796,15 +824,15 @@ export default function Chat() {
                 />
               </TouchableOpacity>
 
-            </View></View>
+            </View>
           <TouchableOpacity
-            style={[styles.sendButton, { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }]}
+            style={[styles.sendButton, { backgroundColor: connected && (content.trim() ||  selectedImages.length !== 0 )? '#128C7E' : '#A0A0A0' }]}
             onPress={sendMessage}
             disabled={!connected || (!content.trim() && selectedImages.length === 0)}
           >
             <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
           </TouchableOpacity>
-        </View>
+        </View></View>
       )}
 
     </View>
@@ -840,6 +868,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     maxHeight: 120,
     marginRight: 8,
+    maxWidth:"100%"
   },
   imageWrapper: {
     position: "relative",
@@ -894,11 +923,11 @@ const styles = StyleSheet.create({
  },*/
   inputContainerAndroid: {
     position: "absolute",
-    bottom: 0,
     left: 0,
+    bottom:0,
     right: 0,
-    flexDirection: "row",
-    alignItems: "flex-end",
+    /*flexDirection: "row",
+    alignItems: "flex-end",*/
     paddingHorizontal: 8,
     paddingVertical: 8,
     backgroundColor: "#EFEAE2",

@@ -10,7 +10,7 @@ import {
 import { useAuth } from '@/components/AuthContext';
 import { useChatSocket } from '@/components/ChatSocketContext';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { StompSubscription } from '@stomp/stompjs';
@@ -19,8 +19,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useRef, useState } from 'react';
 
+import * as ImagePicker from "expo-image-picker";
+
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
+
 
 interface GroupMessageDTO {
     clientId: string;
@@ -44,9 +47,10 @@ export default function GroupChat() {
     const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
     const [groupMembers, setGroupMembers] = useState<string[]>([]);
     const [friends, setFriends] = useState<string[]>([]);
+    const [selectedImages, setSelectedImages] = useState<string[]>([]);
 
     const [content, setContent] = useState('');
-    const [messages, setMessages] = useState<GroupMessageDTO[]>([]);
+    const [messages, setMessages] = useState<any[]>([]);
     const [groupKey, setGroupKey] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const openedsubscriptionRef = useRef<StompSubscription | null>(null);
@@ -387,36 +391,68 @@ export default function GroupChat() {
     }, [connected, groupId, groupKey, stompClient]);
 
     const sendMessage = async () => {
-        if (!stompClient.current || !connected || !content.trim() || !groupKey || !privateSigningKey || !email) {
+        if (!stompClient.current || !connected  || !groupKey || !privateSigningKey || !email) {
             return;
         }
-
+        const clientId = uuidv4();
         const rawContent = content;
         setContent('');
-
+        const imagesToSend = selectedImages;
+        let imageIds: number[] = [];
         const encrypted = encryptGroupMessage(groupKey, rawContent);
         const signature = signEncryptedContent(encrypted, privateSigningKey);
         const disappearingstatus = disappearing ? "DISAPPEARING" : "NOT_DISAPPEARING";
+
+        const localMessage = {
+            clientId: clientId,
+            content: rawContent,
+            signature,
+            timeSent: new Date().toISOString(),
+            senderEmail: email,
+            disappearingStatus: disappearingstatus,
+            read: false,
+            imageIds: [],
+            localImageUris: imagesToSend,
+            sending: true,
+        };
+
+
+        setMessages((prev) => [
+            ...prev,
+            { ...localMessage, content: rawContent }
+        ]);
+
+        if (imagesToSend.length > 0) {
+            imageIds = await uploadMessageImages(imagesToSend);
+        }
         const message = {
-            clientId: uuidv4(),
+            clientId: clientId,
             content: encrypted,
             signature,
             timeSent: new Date().toISOString(),
             senderEmail: email,
             groupId,
-            disappearingStatus: disappearingstatus
+            disappearingStatus: disappearingstatus,
+            imageIds: imageIds
         };
-
         try {
             stompClient.current.publish({
                 destination: `/socket-subscriber/group/${groupId}`,
                 body: JSON.stringify(message)
             });
-
-            setMessages((prev) => [
-                ...prev,
-                { ...message, content: rawContent }
-            ]);
+             setSelectedImages([]);
+            setMessages((prev) =>
+                prev.map((msg: any) =>
+                    msg.clientId === clientId
+                        ? {
+                            ...msg,
+                            imageIds,
+                            localImageUris: [],
+                            sending: false,
+                        }
+                        : msg
+                )
+            );
         } catch (error) {
             console.log("Error sending group message:", error);
         }
@@ -429,7 +465,65 @@ export default function GroupChat() {
                 : [...prev, friendEmail]
         );
     }
+    function pickImages() {
+        const pickImages = async () => {
+            const permissionResult =
+                await ImagePicker.requestMediaLibraryPermissionsAsync();
 
+            if (!permissionResult.granted) {
+                Alert.alert("Permission needed", "Allow gallery access to choose images.");
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsMultipleSelection: true,
+                selectionLimit: 5,
+                quality: 0.4,
+            });
+
+            if (result.canceled) return;
+
+            const uris = result.assets.map((asset) => asset.uri);
+            setSelectedImages((prev) => [...prev, ...uris]);
+        };
+
+        pickImages();
+    }
+
+    async function uploadMessageImages(imageUris: string[]) {
+        if (!token || imageUris.length === 0) return [];
+
+        const formData = new FormData();
+
+
+        imageUris.forEach((uri, index) => {
+            const fileName = uri.split("/").pop() ?? `image-${index}.jpg`;
+
+            console.log("ANDROID UPLOAD URI:", uri);
+            formData.append("files", {
+                uri: Platform.OS === "android" ? uri : uri.replace("file://", ""),
+                name: fileName,
+                type: "image/jpeg",
+            } as any);
+        });
+
+        const response = await fetch(
+            `http://${IP_ADDRESS}:8080/messages/images`,
+            {
+                method: "POST",
+                body: formData,
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`Image upload failed: ${response.status}`);
+        }
+        return await response.json();
+    }
     return (
 
 
@@ -518,6 +612,36 @@ export default function GroupChat() {
                                                             item.content
                                                 }
                                             </Text>
+                                            {(item.disappearingStatus ==="NOT_DISAPPEARING") ?
+                                            (<>
+                                           {item.localImageUris?.map((uri: string) => (
+                                                <Image key={uri} source={{
+                                                    uri: uri, headers: {
+                                                        Authorization: `Bearer ${token}`,
+                                                    },
+                                                }} style={styles.messageImage} />
+                                            ))}
+                                            {item.imageIds?.map((id: number) => (
+                                                <Image
+                                                    key={id}
+                                                    source={{
+                                                        uri: `http://${IP_ADDRESS}:8080/messages/images/${id}`,
+                                                        headers: {
+                                                            Authorization: `Bearer ${token}`,
+                                                        },
+                                                    }}
+                                                    /*contentFit="cover"*/
+                                                    onLoad={() => console.log("IMAGE LOADED:", id)}
+                                                    onError={(e) => console.log("IMAGE ERROR:", id)}
+                                                    style={styles.messageImage}
+                                                />
+                                            ))}</>) : null
+                                        }
+                                            {item.sending && (
+                                                <Text style={{ fontSize: 10, color: "gray", fontStyle: "italic" }}>
+                                                    sending...
+                                                </Text>
+                                            )}
                                             <Text style={{ fontSize: 10, color: 'gray', marginTop: 5 }}>
                                                 {new Date(item.timeSent).toLocaleTimeString()}
                                             </Text>
@@ -538,7 +662,7 @@ export default function GroupChat() {
                     <View style={styles.modalCard}>
                         <Text style={styles.modalTitle}>Add member</Text>
 
-                        <ScrollView style={{maxHeight:300}}>
+                        <ScrollView style={{ maxHeight: 300 }}>
                             {friends.map((item) => {
                                 const selected = selectedMembers.includes(item);
 
@@ -579,74 +703,153 @@ export default function GroupChat() {
             {Platform.OS === 'ios' ? (<KeyboardAvoidingView behavior={'padding'}
                 keyboardVerticalOffset={90}>
                 <View style={styles.inputContainer}>
-                    <View style={styles.textInputWrapper}>
-                        <TextInput
-                            style={styles.textInput}
-                            value={content}
-                            onChangeText={setContent}
-                            placeholder="Group message"
-                            placeholderTextColor="#888"
-                            multiline
-                        />
+
+                    {selectedImages.length > 0 && (
+                        <View style={styles.selectedImagesRow}>
+                            {selectedImages.map((uri) => (
+                                <View key={uri} style={styles.imageWrapper}>
+                                    <Image source={{ uri }} style={styles.selectedImage} />
+
+                                    <TouchableOpacity
+                                        style={styles.removeImageButton}
+                                        onPress={() =>
+                                            setSelectedImages((prev) =>
+                                                prev.filter((img) => img !== uri)
+                                            )
+                                        }
+                                    >
+                                        <MaterialCommunityIcons
+                                            name="close"
+                                            size={14}
+                                            color="white"
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+
+                            ))}
+                        </View>
+                    )}
+                    <View style={styles.bottomRow}>
+                        <View style={styles.textInputWrapper}>
+                            <TextInput
+                                style={styles.textInput}
+                                value={content}
+                                onChangeText={setContent}
+                                placeholder="Group message"
+                                placeholderTextColor="#888"
+                                multiline
+                            />
+                            <TouchableOpacity
+                                onPress={() => setDisappearing(!disappearing)}
+                                style={styles.iconButton}
+                            >
+                                <MaterialCommunityIcons
+                                    name={disappearing ? "timer" : "timer-off-outline"}
+                                    size={24}
+                                    color={disappearing ? "#128C7E" : "#888"}
+                                />
+                            </TouchableOpacity>
+                        </View>
                         <TouchableOpacity
-                            onPress={() => setDisappearing(!disappearing)}
+                            onPress={() => pickImages()}
                             style={styles.iconButton}
                         >
                             <MaterialCommunityIcons
-                                name={disappearing ? "timer" : "timer-off-outline"}
+                                name={"image-outline"}
                                 size={24}
-                                color={disappearing ? "#128C7E" : "#888"}
+                                color={"#128C7E"}
                             />
                         </TouchableOpacity>
-                    </View>
 
-                    <TouchableOpacity
-                        style={[
-                            styles.sendButton,
-                            { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }
-                        ]}
-                        onPress={sendMessage}
-                        disabled={!connected || !content.trim()}
-                    >
-                        <MaterialCommunityIcons name="send" size={24} color="white" />
-                    </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[
+                                styles.sendButton,
+                                { backgroundColor: connected &&  (content.trim() || selectedImages.length!==0) ? '#128C7E' : '#A0A0A0' }
+                            ]}
+                            onPress={sendMessage}
+                            disabled={!connected || (!content.trim() && selectedImages.length===0)}
+                        >
+                            <MaterialCommunityIcons name="send" size={24} color="white" />
+                        </TouchableOpacity></View>
                 </View></KeyboardAvoidingView>) : (
                 <View style={[
                     styles.inputContainerAndroid,
                     { bottom: keyboardHeight }
                 ]}>
-                    <View style={styles.textInputWrapper}>
-                        <TextInput
-                            style={styles.textInput}
-                            value={content}
-                            onChangeText={setContent}
-                            placeholder="Group message"
-                            placeholderTextColor="#888"
-                            multiline
-                        />
-                        <TouchableOpacity
-                            onPress={() => setDisappearing(!disappearing)}
-                            style={styles.iconButton}
-                        >
-                            <MaterialCommunityIcons
-                                name={disappearing ? "timer" : "timer-off-outline"}
-                                size={24}
-                                color={disappearing ? "#128C7E" : "#888"}
-                            />
-                        </TouchableOpacity>
-                    </View>
+                    {selectedImages.length > 0 && (
+                        <View style={styles.selectedImagesRow}>
+                            {selectedImages.map((uri) => (
+                                <View key={uri} style={styles.imageWrapper}>
+                                    <Image source={{
+                                        uri: uri, headers: {
+                                            Authorization: `Bearer ${token}`,
+                                        },
+                                    }} style={styles.selectedImage} />
 
-                    <TouchableOpacity
-                        style={[
-                            styles.sendButton,
-                            { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }
-                        ]}
-                        onPress={sendMessage}
-                        disabled={!connected || !content.trim()}
-                    >
-                        <MaterialCommunityIcons name="send" size={24} color="white" />
-                    </TouchableOpacity>
-                </View>
+
+                                    <TouchableOpacity
+                                        style={styles.removeImageButton}
+                                        onPress={() =>
+                                            setSelectedImages((prev) =>
+                                                prev.filter((img) => img !== uri)
+                                            )
+                                        }
+                                    >
+                                        <MaterialCommunityIcons
+                                            name="close"
+                                            size={14}
+                                            color="white"
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+
+                            ))}
+                        </View>
+                    )}
+                    <View style={styles.bottomRow}>
+                        <View style={styles.textInputWrapper}>
+                            <TextInput
+                                style={styles.textInput}
+                                value={content}
+                                onChangeText={setContent}
+                                placeholder="Group message"
+                                placeholderTextColor="#888"
+                                multiline
+                            />
+                            <TouchableOpacity
+                                onPress={() => setDisappearing(!disappearing)}
+                                style={styles.iconButton}
+                            >
+                                <MaterialCommunityIcons
+                                    name={disappearing ? "timer" : "timer-off-outline"}
+                                    size={24}
+                                    color={disappearing ? "#128C7E" : "#888"}
+                                />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => pickImages()}
+                                style={styles.iconButton}
+                            >
+                                <MaterialCommunityIcons
+                                    name={"image-outline"}
+                                    size={24}
+                                    color={"#128C7E"}
+                                />
+                            </TouchableOpacity>
+
+                        </View>
+
+                        <TouchableOpacity
+                            style={[
+                                styles.sendButton,
+                                { backgroundColor: connected &&  (content.trim() || selectedImages.length!==0) ? '#128C7E' : '#A0A0A0' }
+                            ]}
+                            onPress={sendMessage}
+                            disabled={!connected ||  (!content.trim() && selectedImages.length===0)}
+                        >
+                            <MaterialCommunityIcons name="send" size={24} color="white" />
+                        </TouchableOpacity>
+                    </View></View>
             )}
         </View>
     );
@@ -659,9 +862,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     inputContainer: {
-        flexDirection: 'row',
+        /* flexDirection: 'row',*/
         paddingBottom: Platform.OS === "android" ? 20 : 8,
-        alignItems: 'flex-end',
+        /*   alignItems: 'flex-end',*/
         paddingHorizontal: 8,
         paddingVertical: 8,
         backgroundColor: 'transparent',
@@ -676,6 +879,45 @@ const styles = StyleSheet.create({
         minHeight: 48,
         maxHeight: 120,
         marginRight: 8,
+    },
+    messageImage: {
+        width: 180,
+        height: 180,
+        borderRadius: 12,
+        marginTop: 6,
+    },
+    bottomRow: {
+        flexDirection: "row",
+        alignItems: "flex-end",
+    },
+    removeImageButton: {
+        position: "absolute",
+        top: -5,
+        right: -5,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: "rgba(0,0,0,0.7)",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 10,
+    },
+
+    selectedImagesRow: {
+        flexDirection: "row",
+        gap: 8,
+        marginBottom: 8,
+        paddingHorizontal: 8,
+        flexWrap: "wrap",
+    },
+
+    selectedImage: {
+        width: 55,
+        height: 55,
+        borderRadius: 10,
+    },
+    imageWrapper: {
+        position: "relative",
     },
     friendItem: {
         flexDirection: "row",
@@ -708,8 +950,8 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        flexDirection: "row",
-        alignItems: "flex-end",
+        /*  flexDirection: "row",
+          alignItems: "flex-end",*/
         paddingHorizontal: 8,
         paddingVertical: 8,
         backgroundColor: "#EFEAE2",

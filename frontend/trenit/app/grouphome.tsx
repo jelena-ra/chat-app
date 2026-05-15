@@ -10,7 +10,6 @@ import { useEffect, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 
-
 interface GroupChatItem {
     groupId: number;
     admin:string;
@@ -32,8 +31,6 @@ export default function GroupHome() {
     const filteredGroups = groups.filter((group) =>
         group.groupName.toLowerCase().includes(searchText.toLowerCase())
     );
-
-    const [friends, setFriends] = useState<string[]>([]);
 
     useEffect(() => {
         if (!connected || !stompClient.current || groups.length === 0) return;
