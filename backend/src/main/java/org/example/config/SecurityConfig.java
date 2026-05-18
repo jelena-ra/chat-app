@@ -26,8 +26,8 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> {})
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**","/swagger-ui/**", /*"/messages/**",*/"/socket/**","/socket",/*"/users/**",*/
-                                "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/auth/**","/swagger-ui/**", /*"/messages/**",*/"/socket/**","/socket","/users/profile/image",
+                                "/v3/api-docs/**", "/messages/images/**").permitAll()
                         .anyRequest().authenticated()
                 );
         http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);

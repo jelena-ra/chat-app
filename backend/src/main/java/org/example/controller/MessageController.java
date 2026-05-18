@@ -1,17 +1,27 @@
 package org.example.controller;
 
+import org.example.dtos.GroupChatDTO;
 import org.example.dtos.MessageDTO;
+import org.example.dtos.OpenMessageDTO;
 import org.example.dtos.ReadUpdateDTO;
+import org.example.model.Group;
+import org.example.model.Image;
 import org.example.model.Message;
+import org.example.service.GroupMessageStatusService;
+import org.example.service.GroupService;
 import org.example.service.MessageService;
 import org.example.service.UserService;
 import org.example.service.presence.ActiveChatStore;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,9 +36,13 @@ public class MessageController {
     @Autowired
     private MessageService _messageService;
     @Autowired
+    private GroupService groupService;
+    @Autowired
     private ActiveChatStore activeChatStore;
     @Autowired
     private UserService _userService;
+    @Autowired
+    private GroupMessageStatusService groupMessageStatusService;
 
 
     @MessageMapping("/send")
@@ -85,11 +99,107 @@ public class MessageController {
     @GetMapping("/getfromChat")
     private ResponseEntity<List<MessageDTO>> getFromChat(@RequestParam String senderEmail, @RequestParam String receiverEmail){
         List<MessageDTO> list = _messageService.getFromChat(senderEmail, receiverEmail);
+        System.out.println(">>> /messages/getfromChats called");
         return ResponseEntity.ok(list);
     }
 
     @GetMapping("/getChats")
     private ResponseEntity <Map<String,MessageDTO>>getChats (@RequestParam String userEmail){
+        System.out.println(">>> /messages/getChats called");
         return ResponseEntity.ok(_messageService.getChatsAndLastMessage(userEmail));
+    }
+
+    @MessageMapping("/group/{groupId}")
+    public void sendGroupMessage(@RequestBody MessageDTO message) {
+
+        Long groupId = message.getGroupId();
+        Group group = groupService.getById(groupId);
+
+        if (group == null) {
+            System.out.println("Group not found.");
+            return;
+        }
+
+        boolean allowed = groupService.isUserMember(groupId, message.getSenderEmail());
+        if (!allowed) {
+            System.out.println("Sender is not in group.");
+            return;
+        }
+
+        var sender = _userService.getByEmail(message.getSenderEmail());
+
+        boolean isValid = _messageService.verifySignature(
+                message.getContent(),
+                message.getSignature(),
+                sender.getPublicKeySigning()
+        );
+
+        if (!isValid) {
+            System.out.println("INVALID SIGNATURE");
+            return;
+        }
+
+        message.setTimeSent(LocalDateTime.now());
+        Message saved = _messageService.saveMessage(message);
+        groupMessageStatusService.createStatusesForGroupMessage(saved);
+
+        String destination = "/topic/group/" + groupId;
+        messagingTemplate.convertAndSend(destination, message);
+
+        System.out.println("Group message sent to group: " + groupId);
+    }
+
+    @GetMapping("/groupChats")
+    public ResponseEntity<List<GroupChatDTO>> getGroupChats(@RequestParam String email) {
+        System.out.println(">>> /messages/groupChats called");
+        return ResponseEntity.ok(_messageService.getGroupChatPreviews(email));
+    }
+    @GetMapping("/group")
+    public ResponseEntity<List<MessageDTO>> getGroupMessages(@RequestParam Long groupId, @RequestParam String userEmail) {
+        List<MessageDTO> messages = _messageService.getGroupMessages(groupId, userEmail);
+        System.out.println(">>> /messages/group called");
+        return ResponseEntity.ok(messages);
+    }
+
+    @MessageMapping("/open-message")
+    public void openMessage(OpenMessageDTO openMessageDTO) {
+        Message msg = _messageService.openDisappearing(openMessageDTO.getClientId());
+        if(msg!=null && !msg.getSender().getEmail().equals(openMessageDTO.getUserEmail())) {
+            List<String> id = new ArrayList<>();
+            id.add(msg.getClientId());
+            messagingTemplate.convertAndSendToUser(
+                    msg.getReceiver().getEmail(),
+                    "/queue/message-opened",
+                    new ReadUpdateDTO("messages-opened", id)
+            );
+        }
+    }
+
+    @MessageMapping("/open-groupmessage")
+    public void openGroupMessage(OpenMessageDTO openMessageDTO) {
+        Message msg = _messageService.openGroupDisappearing(openMessageDTO.getClientId(), openMessageDTO.getUserEmail());
+        if(msg!=null && !msg.getSender().getEmail().equals(openMessageDTO.getUserEmail())) {
+            List<String> id = new ArrayList<>();
+            id.add(msg.getClientId());
+            messagingTemplate.convertAndSendToUser(
+                    openMessageDTO.getUserEmail(),
+                    "/queue/message-opened",
+                    new ReadUpdateDTO("messages-opened", id)
+            );
+        }
+    }
+    @GetMapping("/images/{id}")
+    public ResponseEntity<byte[]> getImage(@PathVariable Long id) {
+        Image image = _messageService.findImageById(id);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(image.getContentType()))
+                .body(image.getData());
+    }
+    @PostMapping("/images")
+    public ResponseEntity<List<Long>> uploadImages(
+            @RequestParam("files") List<MultipartFile> files
+    ) throws IOException {
+        return ResponseEntity.ok(_messageService.addImages(files));
     }
 }

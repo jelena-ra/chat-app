@@ -10,28 +10,15 @@ import org.springframework.stereotype.Repository;
 import org.springframework.data.jpa.repository.Modifying;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface MessageRepository extends JpaRepository<Message, Long> {
-    List<Message> findAllBySender_IdAndReceiver_IdOrSender_IdAndReceiver_Id(Long senderId,Long receiverId, Long senderId2, Long receiverId2);
-
+    List<Message> findAllBySender_IdAndReceiver_IdOrSender_IdAndReceiver_IdOrderByTimeSentAsc(Long senderId,Long receiverId, Long senderId2, Long receiverId2);
+    Optional<Message> findByClientId(String clientId);
     List<Message> findAllBySender_IdOrReceiver_IdOrderByTimeSentDesc(Long id, Long id2);
 
     /*@Query(value = """
-             SELECT m
-                        FROM Message m
-                        JOIN FETCH m.sender
-                        JOIN FETCH m.receiver
-                        WHERE m.id IN (
-                            SELECT MAX(m2.id)
-                            FROM Message m2
-                            WHERE m2.sender.id = :userId OR m2.receiver.id = :userId
-                            GROUP BY LEAST(m2.sender.id, m2.receiver.id), GREATEST(m2.sender.id, m2.receiver.id)
-                        )
-                        ORDER BY m.timeSent DESC
-    """)
-    List<Message> findLastMessagesPerChat(Long userId);*/
-    @Query(value = """
     SELECT DISTINCT ON (
         LEAST(m.sender_id, m.receiver_id),
         GREATEST(m.sender_id, m.receiver_id)
@@ -40,7 +27,8 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
         m.time_sent AS timeSent,
         s.email AS senderEmail,
         r.email AS receiverEmail,
-        m.is_read AS read
+        m.is_read AS read,
+        m.disappearing_status AS disappearingStatus
     FROM message m
     JOIN users s ON s.id = m.sender_id
     JOIN users r ON r.id = m.receiver_id
@@ -49,6 +37,43 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
         LEAST(m.sender_id, m.receiver_id),
         GREATEST(m.sender_id, m.receiver_id),
         m.time_sent DESC
+""", nativeQuery = true)
+    List<LastChatMessageProjection> findLastMessagesPerChat(@Param("userId") Long userId);*/
+    @Query(value = """
+SELECT DISTINCT ON (
+    LEAST(m.sender_id, m.receiver_id),
+    GREATEST(m.sender_id, m.receiver_id)
+)
+    m.client_id AS clientId,
+    m.content AS content,
+    m.time_sent AS timeSent,
+    s.email AS senderEmail,
+    r.email AS receiverEmail,
+    m.is_read AS read,
+    m.disappearing_status AS disappearingStatus,
+    m.group_id AS groupId,
+    COALESCE(array_agg(mi.image_id) FILTER (WHERE mi.image_id IS NOT NULL), '{}') AS imageIds
+FROM message m
+JOIN users s ON s.id = m.sender_id
+JOIN users r ON r.id = m.receiver_id
+LEFT JOIN message_images mi ON mi.message_id = m.id
+WHERE m.sender_id = :userId OR m.receiver_id = :userId
+GROUP BY
+    m.id,
+    m.client_id,
+    m.content,
+    m.time_sent,
+    s.email,
+    r.email,
+    m.is_read,
+    m.disappearing_status,
+    m.group_id,
+    m.sender_id,
+    m.receiver_id
+ORDER BY
+    LEAST(m.sender_id, m.receiver_id),
+    GREATEST(m.sender_id, m.receiver_id),
+    m.time_sent DESC
 """, nativeQuery = true)
     List<LastChatMessageProjection> findLastMessagesPerChat(@Param("userId") Long userId);
 
@@ -72,5 +97,9 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
       AND m.isRead = false
 """)
     int markAllAsReadInChat(@Param("email") String email, @Param("friendEmail") String friendEmail);
+
+    Optional<Message> findTopByGroup_IdOrderByTimeSentDesc(Long groupId);
+
+    List<Message> findAllByGroup_IdOrderByTimeSentAsc(Long groupId);
 
 }

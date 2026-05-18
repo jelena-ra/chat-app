@@ -1,5 +1,6 @@
 import IP_ADDRESS from '@/assets/config';
 import ActionLink from '@/components/ActionLink';
+import { useAuth } from '@/components/AuthContext';
 import Button from '@/components/Button';
 import Background from '@/components/GlobalBackground';
 import KeyPairs from '@/components/KeyPairs';
@@ -10,9 +11,15 @@ import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function Verification(){
       const inputsRef = useRef<(TextInput | null)[]>(Array(6).fill(null));
-        const [email,setEmail] = useState<string>('');
+        const [email,setEmmail] = useState<string>('');
       const [code,setCode]= useState<string[]>(['', '', '', '', '', '']);
       const {privateSigningKey,publicSigningKey, privateCryptoKey,publicCryptoKey} = KeyPairs();
+      const {
+  setEmail,
+  setToken,
+  setPrivateSigningKey,
+  setPrivateEncryptingKey
+} = useAuth();
 
 
 useEffect(() => {
@@ -21,7 +28,9 @@ useEffect(() => {
    const em= await SecureStore.getItemAsync('email');
    console.log("Email u pocetku:"+email);
    if(em!==null){
-   setEmail(em);
+   setEmmail(em);
+setEmail(em);
+
    }
    }
     getEmailToken();
@@ -37,7 +46,9 @@ useEffect(() => {
         try{
             const response = await fetch(`http://${IP_ADDRESS}:8080/auth/resendCode?email=` +email,{
                 method:'POST',
-              
+              headers: {
+  'Content-Type': 'application/json',
+},
         });
 
         if (!response.ok) {
@@ -67,6 +78,8 @@ useEffect(() => {
 
             await SecureStore.setItemAsync(`privateSigningKey_${safeEmail}`, privateSigningKey);
             await SecureStore.setItemAsync(`privateCryptoKey_${safeEmail}`, privateCryptoKey);
+            setPrivateSigningKey(privateSigningKey);
+            setPrivateEncryptingKey(privateCryptoKey);
 
             console.log("EMAIL PRI SAVE:", safeEmail);
             const test = await SecureStore.getItemAsync(`privateCryptoKey_${safeEmail}`);
@@ -76,7 +89,9 @@ useEffect(() => {
             console.log("sad setuje public i priv key")
             const response = await fetch(`http://${IP_ADDRESS}:8080/auth/publicKeys`,{
                 method:'POST',
-                
+                headers: {
+  'Content-Type': 'application/json',
+},
                   body: JSON.stringify({
                         email: email,
                         publicSigningkey: publicSigningKey,
@@ -102,6 +117,9 @@ useEffect(() => {
              console.log("sad salje request")
             const response = await fetch(`http://${IP_ADDRESS}:8080/auth/verify?code=`+finalCode+'&email='+email,{
             method:'POST',
+            headers: {
+  'Content-Type': 'application/json',
+},
             
         });
 
@@ -116,7 +134,10 @@ useEffect(() => {
         await SecureStore.setItemAsync('accessToken', data.accessToken);
         await SecureStore.setItemAsync('refreshToken', data.refreshToken);
 
+         setToken(data.accessToken);
+
         const em = Array.isArray(email) ? email[0] : email;
+        await SecureStore.deleteItemAsync('email');
         await SecureStore.setItemAsync('email', em);
 
         console.log("ovde setuje token: ", data.accessToken )

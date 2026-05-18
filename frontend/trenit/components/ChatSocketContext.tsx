@@ -17,8 +17,11 @@ export const ChatSocketProvider = ({ children }: { children: ReactNode }) => {
   const [connected, setConnected] = useState(false);
 
   async function refreshAccessToken() {
+    console.log("SOCKET REFRESH START");
     const refreshToken = await SecureStore.getItemAsync('refreshToken');
     if (!refreshToken) throw new Error('No refresh token found');
+
+    console.log("refreshToken before request:", refreshToken);
 
     const response = await fetch(`http://${IP_ADDRESS}:8080/auth/refresh`, {
       method: 'POST',
@@ -26,7 +29,9 @@ export const ChatSocketProvider = ({ children }: { children: ReactNode }) => {
       body: JSON.stringify({ refreshToken })
     });
 
-    const data = await response.json();
+    const raw = await response.text();
+  console.log("SOCKET REFRESH RAW:", raw);
+    const data = raw ? JSON.parse(raw) : {};
     const newAccessToken = data.accessToken;
     const newRefreshToken = data.refreshToken;
 
@@ -37,9 +42,9 @@ export const ChatSocketProvider = ({ children }: { children: ReactNode }) => {
     return newAccessToken;
   }
 
-  async function getValidToken(): Promise<string> {
+  async function getValidToken(): Promise<string|null> {
     const storedToken = await SecureStore.getItemAsync('accessToken');
-    if (!storedToken) throw new Error('No access token found');
+    if (!storedToken) return null;
 
     const payload = JSON.parse(atob(storedToken.split('.')[1]));
     const now = Math.floor(Date.now() / 1000);
@@ -55,12 +60,15 @@ export const ChatSocketProvider = ({ children }: { children: ReactNode }) => {
     let isMounted = true;
 
     async function connectSocket() {
-      if (!email || !token) return;
+      if (!email) return;
       if (stompClient.current?.active) return;
 
       try {
         const validToken = await getValidToken();
-
+        if (!validToken) {
+          console.log("Socket skipped: no access token yet");
+          return;
+      }
         const client = new Client({
           brokerURL: `ws://${IP_ADDRESS}:8080/socket`,
           connectHeaders: {

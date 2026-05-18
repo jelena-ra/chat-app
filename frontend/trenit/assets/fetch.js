@@ -1,15 +1,19 @@
 import IP_ADDRESS from '@/assets/config';
 import * as SecureStore from 'expo-secure-store';
  
+let refreshPromise = null;
+
 export const fetchWithAuth = async (url, options = {},token) => {
+
+  const storedtoken = await SecureStore.getItemAsync('accessToken');
 
   let headers = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  if (storedtoken) {
+    headers['Authorization'] = `Bearer ${storedtoken}`;
   }
 
  
@@ -20,15 +24,20 @@ export const fetchWithAuth = async (url, options = {},token) => {
     console.log("Token expired, trying refresh...");
 
     try {
-      const refreshToken = await SecureStore.getItemAsync('refreshToken');
-      if (!refreshToken) throw new Error("Nema refresh tokena");
-      console.log("REfresh token: ",refreshToken);
+        if (!refreshPromise) {
+          console.log("FETCH REFRESH START");
+        refreshPromise = (async () => {
+          const refreshToken = await SecureStore.getItemAsync('refreshToken');
+          if (!refreshToken) throw new Error("Nema refresh tokena");
 
-      const refreshResponse = await fetch(`http://${IP_ADDRESS}:8080/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: refreshToken })
-      });
+          console.log("refreshToken before request:", refreshToken);
+
+          const refreshResponse = await fetch(`http://${IP_ADDRESS}:8080/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken: refreshToken })
+          });
+
 
       if (!refreshResponse.ok) {
         throw new Error("Refresh token invalid");
@@ -44,8 +53,12 @@ export const fetchWithAuth = async (url, options = {},token) => {
 
       await SecureStore.setItemAsync('accessToken', newAccessToken);
       await SecureStore.setItemAsync('refreshToken', newRefreshToken);
+      return data.accessToken;
+      })();
+      }
+      const newAccessToken = await refreshPromise;
+  
 
-   
       headers['Authorization'] = `Bearer ${newAccessToken}`;
       response = await fetch(url, { ...options, headers });
 
@@ -54,6 +67,8 @@ export const fetchWithAuth = async (url, options = {},token) => {
     
      
       throw error; 
+     } finally {
+      refreshPromise = null;
     }
   }
 

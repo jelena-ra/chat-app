@@ -9,17 +9,20 @@ import org.example.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.*;
 
 @Service
 public class UserService {
 
     @Autowired
     private final UserRepository _userRepository;
+
+    @Autowired
+    private  ImageService imageService;
 
     public UserService(UserRepository userRepository){
         this._userRepository = userRepository;
@@ -34,9 +37,31 @@ public class UserService {
     public void verify(String email){
         User user = _userRepository.findByEmail(email).orElseThrow(()-> new RuntimeException(" User not found"));
         user.setVerified(true);
-        user.setProfile(new UserProfile("","",null, new Image()));
+        user.setProfile(new UserProfile("","",null, null));
         _userRepository.save(user);
     }
+    public void editProfile(String email, String name, String surname, LocalDate birthdate ){
+        User user = _userRepository.findByEmail(email).orElseThrow(()-> new RuntimeException(" User not found"));
+        user.getProfile().setName(name);
+        user.getProfile().setSurname(surname);
+        user.getProfile().setBirthdate(birthdate);
+        _userRepository.save(user);
+    }
+
+    public void uploadProfileImage(String email, MultipartFile file){
+        User user = _userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getProfile() == null) {
+            user.setProfile(new UserProfile("", "", null, null));
+        }
+
+        Image image = imageService.createImageFromFile(file);
+        user.getProfile().setImage(image);
+
+        _userRepository.save(user);
+    }
+
     public void savePublicKey (String email, String publicKeySigning , String publicKeyEncrypting){
         User user = _userRepository.findByEmail(email).orElseThrow(()-> new RuntimeException(" User not found"));
         user.setPublicKeySigning(publicKeySigning);
@@ -45,6 +70,10 @@ public class UserService {
     }
     public User getByEmail(String email){
         return _userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    public Optional<User> findByEmail(String email){
+        return _userRepository.findByEmail(email);
     }
     public User getById(Long id){
         return _userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));

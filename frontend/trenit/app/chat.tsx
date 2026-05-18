@@ -5,17 +5,19 @@ import { useChatSocket } from '@/components/ChatSocketContext';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { StompSubscription } from "@stomp/stompjs";
-import { useLocalSearchParams } from 'expo-router';
+/*import { Image } from 'expo-image';*/
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, AppState, AppStateStatus, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, AppStateStatus, FlatList, Image, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
 
 import 'react-native-get-random-values';
 
+import * as ImagePicker from "expo-image-picker";
 import { TextDecoder, TextEncoder } from 'text-encoding';
 import nacl, { box, randomBytes } from "tweetnacl";
 import { decodeBase64, decodeUTF8, encodeBase64, encodeUTF8 } from 'tweetnacl-util';
-
 
 
 Object.assign(globalThis, {
@@ -25,11 +27,13 @@ Object.assign(globalThis, {
 
 
 export default function Chat() {
-
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const receiverEmail = Array.isArray(params.receivermail) ? params.receivermail[0] : params.receivermail;
   const sharedKeyRef = useRef<Uint8Array | null>(null);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [content, setContent] = useState("");
   const [disappearing, setDisappearing] = useState(false);
@@ -41,13 +45,57 @@ export default function Chat() {
   const subscriptionRef = useRef<StompSubscription | null>(null);
   const readsubscriptionRef = useRef<StompSubscription | null>(null);
 
+  const openedsubscriptionRef = useRef<StompSubscription | null>(null);
+
   const { email, token, privateSigningKey, privateEncryptingKey } = useAuth();
   const { stompClient, connected } = useChatSocket();
 
+  const [revealedMessages, setRevealedMessages] = useState<Record<string, boolean>>({});
+
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardHeight(e.endCoordinates.height - insets.bottom);
+    });
+
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   useEffect(() => {
     console.log(`[VREME: ${new Date().toISOString().split('T')[1]}] 0. U prvom sam useeffectu...`);
     let currentReceiverCryptoKey = publicEncryptingKeyReceiver;
+
+
+    async function getPublicKeys(useremail: string) {
+      if (!token) {
+        console.log("access token not found")
+        return;
+      }
+      try {
+
+
+        const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/users/getPublicKeys?userEmail=${useremail}`, token)
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        return data;
+
+
+      } catch (error) {
+        console.error("Error fetching previous messages:", error);
+      }
+    }
+
 
     async function receiverKeys() {
       const receiverData = await getPublicKeys(receiverEmail);
@@ -65,7 +113,7 @@ export default function Chat() {
     receiverKeys();
 
 
-  }, [receiverEmail, privateEncryptingKey])
+  }, [receiverEmail, privateEncryptingKey, token])
 
   useEffect(() => {
     if (!email || !receiverEmail) return;
@@ -102,14 +150,20 @@ export default function Chat() {
         readsubscriptionRef.current.unsubscribe();
       }
 
+      if (openedsubscriptionRef.current) {
+        openedsubscriptionRef.current.unsubscribe();
+      }
+
 
       subscriptionRef.current = stompClient.current.subscribe(`/user/${email}/queue/messages`, (message) => {
 
 
         const receivedMessage = JSON.parse(message.body);
+
+
         const chatKey = receivedMessage.senderEmail === email ? receivedMessage.receiverEmail : receivedMessage.senderEmail;
 
-        if (sharedKeyRef.current) {
+        if (sharedKeyRef.current && receivedMessage.disappearingStatus !== "READ") {
           try {
             const decrypted = decrypt(sharedKeyRef.current, receivedMessage.content);
             receivedMessage.content = decrypted;
@@ -117,6 +171,9 @@ export default function Chat() {
             console.log("WS Decryption error", e);
           }
 
+        }
+        if (receivedMessage.disappearingStatus === "READ") {
+          receivedMessage.content = "disappearing..."
         }
         console.log("Subscribed:", subscriptionRef.current);
         setChatMessages((prev) => {
@@ -153,8 +210,40 @@ export default function Chat() {
 
 
             );
+          }
 
-            console.log("Eco sad sve: ", updatedChats[chatKey]);
+          return {
+            ...prev,
+            ...updatedChats,
+          };
+        });
+
+      });
+
+
+      openedsubscriptionRef.current = stompClient.current.subscribe(`/user/${email}/queue/message-opened`, (message) => {
+
+
+        const messageUpdate = JSON.parse(message.body);
+
+
+        const updatedMessageIds: number[] = messageUpdate.messageId || [];
+
+        if (updatedMessageIds.length === 0) return;
+
+        setChatMessages((prev) => {
+          const updatedChats: Record<string, any[]> = {};
+
+          for (const chatKey in prev) {
+            const currentMessages = Array.isArray(prev[chatKey]) ? prev[chatKey] : [];
+
+            updatedChats[chatKey] = currentMessages.map((msg: any) =>
+              updatedMessageIds.includes(msg.clientId)
+                ? { ...msg, disappearingStatus: "READ" }
+                : msg
+
+
+            );
           }
 
           return {
@@ -218,17 +307,19 @@ export default function Chat() {
         }
 
         const messages = await response.json();
-
-
         if (!isMounted) return;
-
         const filteredkeys = messages.map((msg: any) => {
           const chatKey = msg.senderEmail === email ? msg.receiverEmail : msg.senderEmail;
           try {
-            msg.content = decrypt(sharedKey, msg.content);
+            if (msg.disappearingStatus === "READ") {
+              msg.content = "";
+            } else {
+              msg.content = decrypt(sharedKey, msg.content);
+            }
           } catch (error) {
             console.log("error with decryption: " + error);
           }
+
           return { ...msg, chatKey };
         });
 
@@ -254,27 +345,6 @@ export default function Chat() {
   }, [email, receiverEmail, privateEncryptingKey, sharedKey, token]);
 
 
-  async function getPublicKeys(useremail: string) {
-    if (!token) {
-      console.log("access token not found")
-      return;
-    }
-    try {
-
-
-      const response = await fetchWithAuth(`http://${IP_ADDRESS}:8080/users/getPublicKeys?userEmail=${useremail}`, token)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      return data;
-
-
-    } catch (error) {
-      console.error("Error fetching previous messages:", error);
-    }
-  }
-
 
   const sendMessage = async () => {
 
@@ -292,9 +362,35 @@ export default function Chat() {
     const rawContent = content;
     setContent("");
     if (sharedKey != null && privateSigningKey != null) {
+      const imagesToSend = selectedImages;
+      setSelectedImages([]);
       const finalcontent = encrypt(sharedKey, rawContent);
       const signature = sign(finalcontent, decodeBase64(privateSigningKey));
       const clientId = uuidv4();
+      const disappearingstatus = disappearing ? "DISAPPEARING" : "NOT_DISAPPEARING";
+      let imageIds: number[] = [];
+
+      const localMessage = {
+        clientId,
+        content: rawContent,
+        signature,
+        timeSent: new Date().toISOString(),
+        senderEmail: email,
+        receiverEmail,
+        disappearingStatus: disappearingstatus,
+        read: false,
+        imageIds: [],
+        localImageUris: imagesToSend,
+        sending: true,
+      };
+      setChatMessages((prev) => ({
+        ...prev,
+        [receiverEmail]: [...(prev[receiverEmail] || []), localMessage]
+      }));
+      if (imagesToSend.length > 0) {
+        imageIds = await uploadMessageImages(imagesToSend);
+      }
+
       const message = {
         clientId: clientId,
         content: finalcontent,
@@ -302,11 +398,14 @@ export default function Chat() {
         timeSent: new Date().toISOString(),
         senderEmail: email,
         receiverEmail: receiverEmail,
-        disappearing: disappearing,
-        read: false
+        disappearingStatus: disappearingstatus,
+        read: false,
+        imageIds: imageIds,
       }
 
+
       console.log("Sending message:", message);
+
       try {
         client.publish({
           destination: "/socket-subscriber/send",
@@ -318,17 +417,47 @@ export default function Chat() {
         console.error("Error sending message:", error);
 
       }
-      message.content = rawContent;
+
       setChatMessages((prev) => ({
         ...prev,
-        [receiverEmail]: [...(prev[receiverEmail] || []), message]
+        [receiverEmail]: (prev[receiverEmail] || []).map((msg: any) =>
+          msg.clientId === clientId
+            ? {
+              ...msg,
+              imageIds,
+              localImageUris: [],
+              sending: false,
+            }
+            : msg
+        ),
       }));
-
     }
   };
 
   const newNonce = () => randomBytes(box.nonceLength);
 
+  function revealMessage(item: any) {
+    setRevealedMessages((prev) => ({
+      ...prev,
+      [item.clientId]: true,
+    }));
+
+    stompClient.current?.publish({
+      destination: '/socket-subscriber/open-message',
+      body: JSON.stringify({
+        clientId: item.clientId,
+        userEmail: email
+      })
+    })
+    setTimeout(() => {
+      setRevealedMessages((prev) => ({
+        ...prev,
+        [item.clientId]: false,
+      }));
+
+    }, 10000);
+
+  }
 
   function encrypt(shared: Uint8Array, json: any) {
 
@@ -366,6 +495,65 @@ export default function Chat() {
     return JSON.parse(base64DecryptedMessage);
   };
 
+  function pickImages() {
+    const pickImages = async () => {
+      const permissionResult =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permissionResult.granted) {
+        Alert.alert("Permission needed", "Allow gallery access to choose images.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: 5,
+        quality: 0.4,
+      });
+
+      if (result.canceled) return;
+
+      const uris = result.assets.map((asset) => asset.uri);
+      setSelectedImages((prev) => [...prev, ...uris]);
+    };
+
+    pickImages();
+  }
+
+  async function uploadMessageImages(imageUris: string[]) {
+    if (!token || imageUris.length === 0) return [];
+
+    const formData = new FormData();
+
+
+    imageUris.forEach((uri, index) => {
+      const fileName = uri.split("/").pop() ?? `image-${index}.jpg`;
+
+        console.log("ANDROID UPLOAD URI:", uri);
+       formData.append("files", {
+      uri: Platform.OS === "android" ? uri : uri.replace("file://", ""),
+      name: fileName,
+      type: "image/jpeg",
+    } as any);
+  });
+
+    const response = await fetch(
+      `http://${IP_ADDRESS}:8080/messages/images`,
+      {
+        method: "POST",
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Image upload failed: ${response.status}`);
+    }
+    return await response.json();
+  }
   function sign(message: any, secretKey: Uint8Array) {
 
     const messageAsUint8Array = decodeBase64(message);
@@ -380,25 +568,29 @@ export default function Chat() {
      return nacl.sign.detached.verify(messageBytes, signature2, publicKey);
    }*/
   return (
-    <KeyboardAvoidingView
 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      style={{ flex: 1, backgroundColor: '#EFEAE2' }}
-    >
+    <View style={{ flex: 1 }}>
+      {(<Stack.Screen
+        options={{
+          headerLeft: () => (
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <MaterialCommunityIcons name="account" size={34} color="#5a3e36" />
+              <Text style={{ fontWeight: "bold", fontSize: 15, padding: 5, margin: 5 }}>{receiverEmail}</Text>
+            </View>
+          ),
+        }}
+      />)}
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="#128C7E" />
         </View>
-      ) : (
-
-
+      ) : (<View style={{ flex: Platform.OS === 'ios' ? 1 : 0.9 }}>
         <FlatList
           inverted={true}
           data={[...messages].reverse()}
           keyboardShouldPersistTaps="handled"
-          keyExtractor={(_, index) => index.toString()}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          keyExtractor={(item) => item.clientId}
+          contentContainerStyle={{ paddingBottom: 80 }}
           renderItem={({ item }) => {
             const isMe = item.senderEmail === email;
 
@@ -416,76 +608,255 @@ export default function Chat() {
                 </Text>
 
                 {/*#DCF8C6 */}
-                <View
+                <TouchableOpacity
+                  disabled={item.disappearingStatus !== "DISAPPEARING" || item.senderEmail === email}
+                  onPress={() => revealMessage(item)}
                   style={{
                     backgroundColor: isMe ? "#dfc490" : "#ececec",
                     padding: 10,
                     borderRadius: 10,
                   }}
                 >
-                  <Text>
-                    {sharedKey
-                      ? item.content
-                      : "Dekriptovanje..."}
-                  </Text>
+                  <Text style={{
+                    opacity: item.disappearingStatus === "NOT_DISAPPEARING" && !revealedMessages[item.clientId] ? 1 : 0.4,
+                    fontStyle: item.disappearingStatus === "DISAPPEARING" ? "italic" : "normal",
+                  }}>
+                    {item.disappearingStatus === "READ" &&
+                      !revealedMessages[item.clientId]
+                      ? <Text>Disappearing <MaterialCommunityIcons name="clock-fast" /></Text>
+
+                      : item.disappearingStatus === "DISAPPEARING" &&
+                        item.senderEmail !== email
+
+                        ? revealedMessages[item.clientId]
+                          ? item.content
+                          : "Tap to reveal 👀"
+
+                        : item.disappearingStatus === "DISAPPEARING" &&
+                          item.senderEmail === email
+
+                          ? <Text>Disappearing <MaterialCommunityIcons name="clock-fast" /></Text>
+
+                          : sharedKey
+                            ? item.content
+                            : "Decrypting..."}</Text>
+
+                  {item.localImageUris?.map((uri: string) => (
+                    <Image key={uri} source={{
+                      uri: uri, headers: {
+                        Authorization: `Bearer ${token}`,
+                      },
+                    }} style={styles.messageImage} />
+                  ))}
+                  {item.imageIds?.map((id: number) => (
+                    <Image
+                      key={id}
+                      source={{
+                        uri: `http://${IP_ADDRESS}:8080/messages/images/${id}`,
+                        headers: {
+                          Authorization: `Bearer ${token}`,
+                        },
+                      }}
+                      /*contentFit="cover"*/
+                      onLoad={() => console.log("IMAGE LOADED:", id)}
+                      onError={(e) => console.log("IMAGE ERROR:", id)}
+                      style={styles.messageImage}
+                    />
+                  ))} 
+                  {item.sending && (
+  <Text style={{ fontSize: 10, color: "gray", fontStyle: "italic" }}>
+    sending...
+  </Text>
+)}
+
+
                   <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                     <Text style={{ fontSize: 10, color: "gray", marginTop: 5 }}>
                       {new Date(item.timeSent).toLocaleTimeString()}
                     </Text>
-                    {(isMe && !item.read) ? <MaterialIcons name="check" size={13} /> : null}
+                    {(isMe && !item.read && !item.sending) ? <MaterialIcons name="check" size={13} /> : null}
                     {(isMe && item.read) ? <MaterialCommunityIcons name="check-all" size={13} color="#29889d" /> : null}
                   </View>
-                </View>
+                </TouchableOpacity>
               </View>
             );
           }}
-        />
+        /></View>
       )}
-      <View style={styles.inputContainer}>
-
-        <View style={styles.textInputWrapper}>
-          <TextInput
-            style={styles.textInput}
-            value={content}
-            onChangeText={setContent}
-            placeholder="Message"
-            placeholderTextColor="#888"
-            multiline={true}
-          />
-
-          <TouchableOpacity
-            onPress={() => setDisappearing(!disappearing)}
-            style={styles.iconButton}
-          >
-            <MaterialCommunityIcons
-              name={disappearing ? "timer" : "timer-off-outline"}
-              size={24}
-              color={disappearing ? "#128C7E" : "#888"}
-            />
-          </TouchableOpacity>
-        </View>
-
-
-        <TouchableOpacity
-          style={[styles.sendButton, { backgroundColor: connected && content.trim() ? '#128C7E' : '#A0A0A0' }]}
-          onPress={sendMessage}
-          disabled={!connected || !content.trim()}
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView
+          behavior={'padding'}
+          keyboardVerticalOffset={90}
         >
-          <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
-      </View>
+          <View style={styles.inputContainer}>
 
-    </KeyboardAvoidingView>
+            {selectedImages.length > 0 && (
+              <View style={styles.selectedImagesRow}>
+                {selectedImages.map((uri) => (
+                  <View key={uri} style={styles.imageWrapper}>
+                    <Image source={{ uri }} style={styles.selectedImage} />
+
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() =>
+                        setSelectedImages((prev) =>
+                          prev.filter((img) => img !== uri)
+                        )
+                      }
+                    >
+                      <MaterialCommunityIcons
+                        name="close"
+                        size={14}
+                        color="white"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                ))}
+              </View>
+            )}
+            <View style={styles.bottomRow}>
+              <View style={styles.textInputWrapper}>
+                <TextInput
+                  style={styles.textInput}
+                  value={content}
+                  onChangeText={setContent}
+                  placeholder="Message"
+                  placeholderTextColor="#888"
+                  multiline={true}
+                />
+                <TouchableOpacity
+                  onPress={() => setDisappearing(!disappearing)}
+                  style={styles.iconButton}
+                >
+                  <MaterialCommunityIcons
+                    name={disappearing ? "timer" : "timer-off-outline"}
+                    size={24}
+                    color={disappearing ? "#128C7E" : "#888"}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => pickImages()}
+                  style={styles.iconButton}
+                >
+                  <MaterialCommunityIcons
+                    name={"image-outline"}
+                    size={24}
+                    color={"#128C7E"}
+                  />
+                </TouchableOpacity>
+              </View>
+
+
+
+              <TouchableOpacity
+                style={[styles.sendButton, { backgroundColor: connected && (content.trim() || selectedImages.length!==0) ? '#128C7E' : '#A0A0A0' }]}
+                onPress={sendMessage}
+                disabled={/*!connected ||*/ (!content.trim() && selectedImages.length===0) }
+              >
+                <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+            </View></View>
+        </KeyboardAvoidingView>
+      ) : (
+        <View style={[
+          styles.inputContainerAndroid,
+          { bottom: keyboardHeight }
+        ]}>
+           {selectedImages.length > 0 && (
+              <View style={styles.selectedImagesRow}>
+                {selectedImages.map((uri) => (
+                  <View key={uri} style={styles.imageWrapper}>
+                     <Image source={{
+                      uri: uri, headers: {
+                        Authorization: `Bearer ${token}`,
+                      },
+                    }} style={styles.selectedImage} />
+                
+
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() =>
+                        setSelectedImages((prev) =>
+                          prev.filter((img) => img !== uri)
+                        )
+                      }
+                    >
+                      <MaterialCommunityIcons
+                        name="close"
+                        size={14}
+                        color="white"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                ))}
+              </View>
+            )}
+          <View style={styles.bottomRow}>
+            <View style={styles.textInputWrapper}>
+              <TextInput
+                style={styles.textInput}
+                value={content}
+                onChangeText={setContent}
+                placeholder="Message"
+                placeholderTextColor="#888"
+                multiline={true}
+              />
+              <TouchableOpacity
+                onPress={() => setDisappearing(!disappearing)}
+                style={styles.iconButton}
+              >
+                <MaterialCommunityIcons
+                  name={disappearing ? "timer" : "timer-off-outline"}
+                  size={24}
+                  color={disappearing ? "#128C7E" : "#888"}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => pickImages()}
+                style={styles.iconButton}
+              >
+                <MaterialCommunityIcons
+                  name={"image-outline"}
+                  size={24}
+                  color={"#128C7E"}
+                />
+              </TouchableOpacity>
+
+            </View>
+          <TouchableOpacity
+            style={[styles.sendButton, { backgroundColor: connected && (content.trim() ||  selectedImages.length !== 0 )? '#128C7E' : '#A0A0A0' }]}
+            onPress={sendMessage}
+            disabled={!connected || (!content.trim() && selectedImages.length === 0)}
+          >
+            <MaterialCommunityIcons name="send" size={24} color="white" style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
+        </View></View>
+      )}
+
+    </View>
   );
 };
 const styles = StyleSheet.create({
 
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    /*flexDirection: 'row',
+    alignItems: 'flex-end',*/
     paddingHorizontal: 8,
     paddingVertical: 8,
     backgroundColor: 'transparent',
+    paddingBottom: Platform.OS === "android" ? 20 : 8,
+  },
+  messageImage: {
+    width: 180,
+    height: 180,
+    borderRadius: 12,
+    marginTop: 6,
+  },
+  bottomRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
   },
   textInputWrapper: {
     flex: 1,
@@ -497,6 +868,37 @@ const styles = StyleSheet.create({
     minHeight: 48,
     maxHeight: 120,
     marginRight: 8,
+    maxWidth:"100%"
+  },
+  imageWrapper: {
+    position: "relative",
+  },
+
+  removeImageButton: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+
+  selectedImagesRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 8,
+    paddingHorizontal: 8,
+    flexWrap: "wrap",
+  },
+
+  selectedImage: {
+    width: 55,
+    height: 55,
+    borderRadius: 10,
   },
   textInput: {
     flex: 1,
@@ -505,7 +907,30 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   iconButton: {
-    padding: 8,
+    padding: 1,
+  },
+  /* selectedImagesRow: {
+   flexDirection: "row",
+   gap: 8,
+   marginBottom: 8,
+   paddingHorizontal: 8,
+ },
+ 
+ selectedImage: {
+   width: 55,
+   height: 55,
+   borderRadius: 10,
+ },*/
+  inputContainerAndroid: {
+    position: "absolute",
+    left: 0,
+    bottom:0,
+    right: 0,
+    /*flexDirection: "row",
+    alignItems: "flex-end",*/
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    backgroundColor: "#EFEAE2",
   },
   sendButton: {
     width: 48,

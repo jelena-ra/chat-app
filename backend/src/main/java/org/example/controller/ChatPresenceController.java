@@ -1,7 +1,9 @@
 package org.example.controller;
 
 import org.example.dtos.ActiveChatDTO;
+import org.example.dtos.ActiveGroupChatDTO;
 import org.example.dtos.ReadUpdateDTO;
+import org.example.service.GroupMessageStatusService;
 import org.example.service.MessageService;
 import org.example.service.presence.ActiveChatStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +24,9 @@ public class ChatPresenceController {
 
     @Autowired
     private MessageService messageService;
+
+    @Autowired
+    private GroupMessageStatusService groupMessageStatusService;
 
     @MessageMapping("/active-chat")
     public void setActiveChat(ActiveChatDTO dto){
@@ -44,5 +49,19 @@ public class ChatPresenceController {
         if(userEmail.isBlank())return;
         System.out.println("CLEAR ACTIVITY FOR : "+ userEmail);
         activeChatStore.clearActiveChat(userEmail);
+    }
+
+    @MessageMapping("/active-group-chat")
+    public void setActiveGroupChat(ActiveGroupChatDTO dto) {
+        if (dto == null || dto.getUserEmail() == null || dto.getGroupId() == null) return;
+
+        System.out.println("ACTIVE GROUP CHAT: " + dto.getUserEmail() + " in group " + dto.getGroupId());
+
+        int updatedCount = groupMessageStatusService.markGroupAsRead(
+                dto.getUserEmail(),
+                dto.getGroupId()
+        );
+
+        System.out.println("GROUP READ UPDATED COUNT: " + updatedCount);
     }
 }
