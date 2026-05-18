@@ -51,11 +51,16 @@ export default function Profile() {
             const data = await response.json();
             setName(data.name ?? '');
             setSurname(data.surname ?? '');
-            setDate(data.birthdate ?? '');
+           
             console.log("Evo ga birthdate: " + data.birthdate);
+          
             if (data.birthdate) {
                 setDate(new Date(data.birthdate));
-            }
+                setBirthdate(data.birthdate);
+                } else {
+                setDate(new Date());
+                setBirthdate('');
+                }
         } catch (error) {
             console.log(error);
         }
@@ -224,7 +229,7 @@ export default function Profile() {
                         />
 
                         <Text style={styles.label}>Birthdate</Text>
-
+                       
                         <DateTimePicker
                             value={date ?? new Date()}
                             mode="date"
